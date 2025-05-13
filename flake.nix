@@ -20,9 +20,17 @@
   in {
     devShells = forAllSystems (system: let
       pkgs = nixpkgsFor.${system};
+      schedulingPkgs = [pkgs.gtk4 pkgs.pkg-config pkgs.bear];
     in {
       default = pkgs.mkShell {
-        packages = [pkgs.clang];
+        packages = [pkgs.clang] ++ schedulingPkgs;
+        shellHook = ''
+          echo "Generating Scheduling clangd tooling files..."
+               cd ./scheduling/
+               # Remember to update this command on the every time it changes on the nob file
+               bear -- clang $(pkg-config --cflags gtk4) $(pkg-config --libs gtk4) -g -O0 -Wall -o build/main src/gtkMain.c
+          echo "DONE!"
+        '';
       };
     });
   };

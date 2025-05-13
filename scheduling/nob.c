@@ -58,7 +58,8 @@ int main(int argc, char **argv) {
   }
 
   String_Builder sb = {0};
-  sb_append_cstr(&sb, "clang ");
+  sb_append_cstr(
+      &sb, "clang $(pkg-config --cflags gtk4) $(pkg-config --libs gtk4) ");
   if (compile_with_verbosity) {
     sb_append_cstr(&sb, "-v ");
   }
@@ -70,7 +71,8 @@ int main(int argc, char **argv) {
   }
 
   sb_append_cstr(&sb, "-Wall ");
-  sb_append_cstr(&sb, "-o " BUILD_FOLDER "main " SRC_FOLDER "main.c");
+  sb_append_cstr(&sb, "-o " BUILD_FOLDER "main " SRC_FOLDER "main.c ");
+  sb_append_cstr(&sb, "");
 
   nob_cmd_append(&cmd, "bash", "-c", sb.items);
   if (!nob_cmd_run_sync_and_reset(&cmd)) {

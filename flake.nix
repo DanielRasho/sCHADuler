@@ -30,9 +30,7 @@
         shellHook = ''
           echo "THIS SHELL MUST BE STARTED FROM THE REPO ROOT!"
           echo "Generating Scheduling clangd tooling files..."
-            cd ./scheduling/ || exit
             bear -- ${schedulingBasicCompilation}
-            cd .. || exit
           echo "DONE!"
         '';
       };

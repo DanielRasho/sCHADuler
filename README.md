@@ -23,3 +23,14 @@ git submodules init --recursive
 All commands to develop on this project must be run on the shell created by
 `nix develop`. Please install [Nix](https://nixos.org/download/) and enable
 [Flakes](https://nixos.wiki/wiki/Flakes).
+
+You only need the clang compiler to run this project.
+
+First compile the `./nob.c` file into an executable like `nob`:
+
+```bash
+clang -o nob ./nob.c
+```
+
+Then you can simply run the `nob -h` command to check the available actions you
+can take.

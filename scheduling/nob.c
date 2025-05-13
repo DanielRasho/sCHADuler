@@ -57,6 +57,8 @@ int main(int argc, char **argv) {
     return 1;
   }
 
+  // If you change this compilation command remember to change it on the Flake
+  // too!
   String_Builder sb = {0};
   sb_append_cstr(
       &sb, "clang $(pkg-config --cflags gtk4) $(pkg-config --libs gtk4) ");

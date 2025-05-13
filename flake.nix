@@ -17,6 +17,9 @@
 
     # Nixpkgs instantiated for supported system types.
     nixpkgsFor = forAllSystems (system: import nixpkgs {inherit system;});
+
+    # Remember to update this command every time it changes on the nob file!
+    schedulingBasicCompilation = ''clang $(pkg-config --cflags gtk4) $(pkg-config --libs gtk4) -g -O0 -Wall -o build/main src/main.c'';
   in {
     devShells = forAllSystems (system: let
       pkgs = nixpkgsFor.${system};
@@ -25,10 +28,10 @@
       default = pkgs.mkShell {
         packages = [pkgs.clang] ++ schedulingPkgs;
         shellHook = ''
+          echo "THIS SHELL MUST BE STARTED FROM THE REPO ROOT!"
           echo "Generating Scheduling clangd tooling files..."
-               cd ./scheduling/
-               # Remember to update this command on the every time it changes on the nob file
-               bear -- clang $(pkg-config --cflags gtk4) $(pkg-config --libs gtk4) -g -O0 -Wall -o build/main src/gtkMain.c
+            cd ./scheduling/ || exit
+            bear -- ${schedulingBasicCompilation}
           echo "DONE!"
         '';
       };

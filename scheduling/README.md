@@ -8,5 +8,5 @@ First compile the `./nob.c` file into an executable like `nob`:
 clang -o nob ./nob.c
 ```
 
-Then you can simply run the `nob --help` command to check the available actions
-you can take.
+Then you can simply run the `nob -h` command to check the available actions you
+can take.

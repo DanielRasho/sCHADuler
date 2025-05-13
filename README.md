@@ -17,3 +17,9 @@ run:
 ```bash
 git submodules init --recursive
 ```
+
+## Developing
+
+All commands to develop on this project must be run on the shell created by
+`nix develop`. Please install [Nix](https://nixos.org/download/) and enable
+[Flakes](https://nixos.wiki/wiki/Flakes).

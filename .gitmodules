@@ -1,0 +1,6 @@
+[submodule "scheduling/deps/luigi"]
+	path = scheduling/deps/luigi
+	url = https://github.com/nakst/luigi
+[submodule "scheduling/deps/nob.h"]
+	path = scheduling/deps/nob.h
+	url = https://github.com/tsoding/nob.h

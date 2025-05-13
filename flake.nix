@@ -32,6 +32,7 @@
           echo "Generating Scheduling clangd tooling files..."
             cd ./scheduling/ || exit
             bear -- ${schedulingBasicCompilation}
+            cd .. || exit
           echo "DONE!"
         '';
       };

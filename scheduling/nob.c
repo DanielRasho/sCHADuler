@@ -10,7 +10,11 @@
 
 #define HELP                                                                   \
   "Usage: nob [-compiler options]\n"                                           \
+  "If no options are provided the command will simply compile the "            \
+  "application in debug mode.\n"                                               \
+  "\n"                                                                         \
   "Compiler options:\n"                                                        \
+  "* -b: Compile with optimization enabled.\n"                                 \
   "* -v: Compile with verbosity enabled.\n"
 
 bool args_contains(int argc, char **argv, const char *arg, int arg_length) {
@@ -43,6 +47,12 @@ int main(int argc, char **argv) {
     compile_with_verbosity = true;
   }
 
+  bool compile_with_optimizations = false;
+  if (args_contains(argc, argv, "-b", 2)) {
+    nob_log(NOB_WARNING, "Will compile with optimizations enabled!");
+    compile_with_optimizations = true;
+  }
+
   if (!mkdir_if_not_exists(BUILD_FOLDER)) {
     return 1;
   }
@@ -51,6 +61,12 @@ int main(int argc, char **argv) {
   sb_append_cstr(&sb, "clang ");
   if (compile_with_verbosity) {
     sb_append_cstr(&sb, "-v ");
+  }
+
+  if (compile_with_optimizations) {
+    sb_append_cstr(&sb, "-O2 -Werror ");
+  } else {
+    sb_append_cstr(&sb, "-g -O0 ");
   }
 
   sb_append_cstr(&sb, "-Wall ");

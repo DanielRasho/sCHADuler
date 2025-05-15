@@ -15,7 +15,7 @@ If you already cloned the repo and now want to initialize the submodules simply
 run:
 
 ```bash
-git submodules init --recursive
+git submodules update --init --recursive
 ```
 
 ## Developing

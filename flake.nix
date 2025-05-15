@@ -29,6 +29,7 @@
         packages = [pkgs.clang] ++ schedulingPkgs;
         shellHook = ''
           echo "THIS SHELL MUST BE STARTED FROM THE REPO ROOT!"
+          mkdir build/ || echo "build/ Already exists!";
           echo "Generating Scheduling clangd tooling files..."
             bear -- ${schedulingBasicCompilation}
           echo "DONE!"

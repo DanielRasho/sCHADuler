@@ -3,3 +3,4 @@ nob
 nob.old
 compile_commands.json
 .cache/
+src/resources.c

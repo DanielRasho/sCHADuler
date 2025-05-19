@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Documentation: https://docs.gtk.org/gio/struct.Resource.html -->
+<gresources>
+  <gresource prefix="/uwu/uvgenios/schaduler">
+		<file>app.css</file>
+  </gresource>
+</gresources>
+

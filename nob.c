@@ -39,8 +39,6 @@ int main(int argc, char **argv) {
     return 1;
   }
 
-  Cmd cmd = {0};
-
   bool compile_with_verbosity = false;
   if (args_contains(argc, argv, "-v", 2)) {
     nob_log(NOB_WARNING, "Will compile with verbosity!");
@@ -57,9 +55,19 @@ int main(int argc, char **argv) {
     return 1;
   }
 
+  Nob_Cmd cmd_res = {0};
+  nob_cmd_append(&cmd_res, "bash", "-c",
+                 "glib-compile-resources --sourcedir=./src/resources/ "
+                 "--target=" BUILD_FOLDER "resources.c --generate-source "
+                 "./src/resources/resources.gresource.xml");
+  if (!nob_cmd_run_sync_and_reset(&cmd_res)) {
+    return 1;
+  }
+
+  Nob_Cmd cmd = {0};
+  String_Builder sb = {0};
   // If you change this compilation command remember to change it on the Flake
   // too!
-  String_Builder sb = {0};
   sb_append_cstr(
       &sb, "clang $(pkg-config --cflags gtk4) $(pkg-config --libs gtk4) ");
   if (compile_with_verbosity) {
@@ -75,6 +83,7 @@ int main(int argc, char **argv) {
   sb_append_cstr(&sb, "-Wall ");
   sb_append_cstr(&sb, "-o " BUILD_FOLDER "main " SRC_FOLDER "main.c ");
   sb_append_cstr(&sb, "");
+  sb_append_null(&sb);
 
   nob_cmd_append(&cmd, "bash", "-c", sb.items);
   if (!nob_cmd_run_sync_and_reset(&cmd)) {

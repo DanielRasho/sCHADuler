@@ -48,8 +48,8 @@ static void activate(GtkApplication *app, gpointer user_data) {
   GtkWidget *box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
   gtk_widget_set_halign(box, GTK_ALIGN_CENTER);
   gtk_widget_set_valign(box, GTK_ALIGN_CENTER);
-
   gtk_window_set_child(GTK_WINDOW(window), box);
+
   GtkWidget *tabStack = gtk_stack_new();
   gtk_box_append((GtkBox *)box, tabStack);
 
@@ -57,7 +57,9 @@ static void activate(GtkApplication *app, gpointer user_data) {
   gtk_stack_switcher_set_stack((GtkStackSwitcher *)tabSwitcher,
                                (GtkStack *)tabStack);
 
-  gtk_window_set_titlebar((GtkWindow *)window, tabSwitcher);
+  GtkWidget *headerBar = gtk_header_bar_new();
+  gtk_header_bar_set_title_widget((GtkHeaderBar *)headerBar, tabSwitcher);
+  gtk_window_set_titlebar((GtkWindow *)window, headerBar);
 
   GtkWidget *calendarView = buildCalendarView((GtkWindow *)window);
   GtkWidget *sincronizationView = buildSyncView((GtkWindow *)window);
@@ -66,8 +68,6 @@ static void activate(GtkApplication *app, gpointer user_data) {
                        "Calendarizacion");
   gtk_stack_add_titled((GtkStack *)tabStack, sincronizationView,
                        "Sincronizacion", "Sincronizacion");
-
-  // gtk_box_append(GTK_BOX(box), button);
 
   gtk_window_present(GTK_WINDOW(window));
 }

@@ -58,7 +58,7 @@ int main(int argc, char **argv) {
   Nob_Cmd cmd_res = {0};
   nob_cmd_append(&cmd_res, "bash", "-c",
                  "glib-compile-resources --sourcedir=./src/resources/ "
-                 "--target=" BUILD_FOLDER "resources.c --generate-source "
+                 "--target=" SRC_FOLDER "resources.c --generate-source "
                  "./src/resources/resources.gresource.xml");
   if (!nob_cmd_run_sync_and_reset(&cmd_res)) {
     return 1;

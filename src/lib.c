@@ -2,6 +2,7 @@
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 typedef size_t *SC_Err;
 static const SC_Err NO_ERROR = (size_t *)0;
@@ -166,6 +167,15 @@ typedef struct {
   char *data;
   size_t length;
 } SC_String;
+
+SC_String SC_String_from_c_string(char *c_str) {
+  SC_String str = {.length = strlen(c_str), .data = c_str};
+  return str;
+}
+
+typedef struct {
+  struct SC_Arena arena;
+} SC_StringBuilder;
 
 typedef struct {
   SC_String pid;

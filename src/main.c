@@ -1,3 +1,4 @@
+#include "gio/gio.h"
 #include "glib-object.h"
 #include "lib.c"
 #include "resources.c"
@@ -95,6 +96,12 @@ static GtkWidget *buildCalendarView(GtkWindow *window) {
   gtk_widget_set_vexpand(simBox, TRUE);
   gtk_widget_set_hexpand(simBox, TRUE);
   gtk_paned_set_end_child((GtkPaned *)simContainer, processInfoBox);
+
+  GtkWidget *label =
+      gtk_label_new("P1, 8, 7, 1\nP2, 4, 15, 2\nP3, 16, 2, 3\nP4, 20, 0, 10");
+  gtk_box_append((GtkBox *)processInfoBox, label);
+  gtk_widget_set_valign(label, GTK_ALIGN_CENTER);
+  gtk_widget_set_halign(label, GTK_ALIGN_CENTER);
 
   // Algorithm selection and load new file half
   GtkWidget *controlsContainer = gtk_box_new(GTK_ORIENTATION_VERTICAL, 5);

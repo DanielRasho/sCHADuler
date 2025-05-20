@@ -4,7 +4,7 @@
 #include <stdlib.h>
 
 typedef size_t *SC_Err;
-static const SC_Err NO_ERROR = 0;
+static const SC_Err NO_ERROR = (size_t *)0;
 static const SC_Err NOT_FOUND = (size_t *)1;
 static const SC_Err MALLOC_FAILED = (size_t *)2;
 static const SC_Err ARENA_ALLOC_NO_SPACE = (size_t *)3;
@@ -12,8 +12,8 @@ static const SC_Err NO_SPACE_LEFT = (size_t *)4;
 static const SC_Err HASHMAP_INITIALIZATION_ERROR = (size_t *)5;
 
 typedef int SC_Bool;
-static const SC_Bool TRUE = 1;
-static const SC_Bool FALSE = 0;
+static const SC_Bool SC_TRUE = 1;
+static const SC_Bool SC_FALSE = 0;
 
 // A panic represents an irrecoverable error.
 //
@@ -92,7 +92,7 @@ void SC_Arena_init(struct SC_Arena *arena, size_t initial_capacity,
   arena->count = 0;
   arena->capacity = initial_capacity;
   arena->next = NULL;
-  arena->deinited = FALSE;
+  arena->deinited = SC_FALSE;
 }
 
 // Allocates the requested space on the arena.
@@ -159,7 +159,7 @@ void SC_Arena_deinit(struct SC_Arena *arena) {
   }
 
   free(arena->data);
-  arena->deinited = TRUE;
+  arena->deinited = SC_TRUE;
 }
 
 typedef struct {

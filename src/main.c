@@ -1,3 +1,4 @@
+#include "glib-object.h"
 #include "lib.c"
 #include "resources.c"
 #include <gdk/gdk.h>
@@ -6,6 +7,28 @@
 
 static void print_hello(GtkWidget *widget, gpointer data) {
   g_print("Hello World\n");
+}
+
+// ################################
+// ||                            ||
+// ||         UI BLOCKS          ||
+// ||                            ||
+// ################################
+
+GtkWidget *TitleLabel(const char *content) {
+  GtkWidget *label = gtk_label_new(content);
+  gtk_widget_add_css_class(label, "h1_title");
+  return label;
+}
+
+GtkWidget *MainButton(const char *label,
+                      void (*onClick)(GtkWidget *widget, gpointer data)) {
+  GtkWidget *btn = gtk_button_new_with_label(label);
+  gtk_widget_add_css_class(btn, "btn_main");
+  if (NULL != onClick) {
+    g_signal_connect(btn, "clicked", G_CALLBACK(onClick), NULL);
+  }
+  return btn;
 }
 
 /**
@@ -17,20 +40,65 @@ static void print_hello(GtkWidget *widget, gpointer data) {
  */
 static GtkWidget *buildCalendarView(GtkWindow *window) {
   GtkWidget *container = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 5);
-  gtk_widget_set_halign(container, GTK_ALIGN_FILL);
   gtk_widget_set_vexpand(container, TRUE);
   gtk_widget_set_hexpand(container, TRUE);
-  gtk_widget_set_size_request(container, -1, -1);
 
+  // Simulation half
   GtkWidget *simContainer = gtk_paned_new(GTK_ORIENTATION_VERTICAL);
   gtk_widget_set_name(simContainer, "simContainer");
-  gtk_widget_set_halign(simContainer, GTK_ALIGN_FILL);
   gtk_widget_set_vexpand(simContainer, TRUE);
   gtk_widget_set_hexpand(simContainer, TRUE);
 
+  GtkWidget *simBox = gtk_box_new(GTK_ORIENTATION_VERTICAL, 1);
+  gtk_widget_set_name(simBox, "simBox");
+  gtk_widget_set_vexpand(simBox, TRUE);
+  gtk_widget_set_hexpand(simBox, TRUE);
+  gtk_paned_set_start_child((GtkPaned *)simContainer, simBox);
+
+  GtkWidget *topSimBox = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
+  gtk_widget_set_hexpand(topSimBox, TRUE);
+  gtk_widget_set_halign(topSimBox, GTK_ALIGN_START);
+  gtk_box_append((GtkBox *)simBox, topSimBox);
+
+  GtkWidget *resetBtn = MainButton("RESET", NULL);
+  gtk_box_append((GtkBox *)topSimBox, resetBtn);
+
+  GtkWidget *processBoxScroller = gtk_scrolled_window_new();
+  gtk_widget_set_vexpand(processBoxScroller, TRUE);
+  gtk_widget_set_hexpand(processBoxScroller, TRUE);
+  gtk_box_append((GtkBox *)simBox, processBoxScroller);
+
+  GtkWidget *processBox = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 1);
+  gtk_widget_set_hexpand(processBox, TRUE);
+  gtk_widget_set_valign(processBox, GTK_ALIGN_CENTER);
+  gtk_widget_set_halign(processBox, GTK_ALIGN_CENTER);
+  gtk_scrolled_window_set_child((GtkScrolledWindow *)processBoxScroller,
+                                processBox);
+
+  GtkWidget *p1Btn = MainButton("P1 Button example", NULL);
+  gtk_box_append((GtkBox *)processBox, p1Btn);
+  GtkWidget *p2Btn = MainButton("P2 Button example", NULL);
+  gtk_box_append((GtkBox *)processBox, p2Btn);
+
+  GtkWidget *simControlsBox = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 3);
+  gtk_box_append((GtkBox *)simBox, simControlsBox);
+
+  GtkWidget *backButton = MainButton("Back", NULL);
+  gtk_box_append((GtkBox *)simControlsBox, backButton);
+  GtkWidget *ppButton = MainButton("Pause/Play", NULL);
+  gtk_box_append((GtkBox *)simControlsBox, ppButton);
+  GtkWidget *nextButton = MainButton("Next", NULL);
+  gtk_box_append((GtkBox *)simControlsBox, nextButton);
+
+  GtkWidget *processInfoBox = gtk_box_new(GTK_ORIENTATION_VERTICAL, 1);
+  gtk_widget_set_name(processInfoBox, "processBox");
+  gtk_widget_set_vexpand(simBox, TRUE);
+  gtk_widget_set_hexpand(simBox, TRUE);
+  gtk_paned_set_end_child((GtkPaned *)simContainer, processInfoBox);
+
+  // Algorithm selection and load new file half
   GtkWidget *controlsContainer = gtk_box_new(GTK_ORIENTATION_VERTICAL, 5);
   gtk_widget_set_name(controlsContainer, "controlsContainer");
-  gtk_widget_set_halign(controlsContainer, GTK_ALIGN_FILL);
   gtk_widget_set_hexpand(controlsContainer, TRUE);
   gtk_widget_set_vexpand(controlsContainer, TRUE);
 
@@ -64,8 +132,8 @@ static void activate(GtkApplication *app, gpointer user_data) {
   gtk_window_set_default_size(GTK_WINDOW(window), 200, 200);
 
   GtkWidget *box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
-  gtk_widget_set_halign(box, GTK_ALIGN_CENTER);
-  gtk_widget_set_valign(box, GTK_ALIGN_CENTER);
+  gtk_widget_set_halign(box, GTK_ALIGN_FILL);
+  gtk_widget_set_valign(box, GTK_ALIGN_FILL);
   gtk_window_set_child(GTK_WINDOW(window), box);
 
   GtkWidget *tabStack = gtk_stack_new();

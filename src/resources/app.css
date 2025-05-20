@@ -1,7 +1,33 @@
 #simContainer {
 	background-color: red;
+	padding: 1rem;
 }
 
 #controlsContainer {
 	background-color: blue;
+}
+
+#simBox {
+	background-color: purple;
+}
+
+#processBox {
+	background-color: orange;
+}
+
+.h1_title{
+	font-size: 2rem;
+}
+
+button {
+	background-image: none;
+}
+
+.btn_main {
+	/* Actual styles */
+	padding: 2rem 1rem;
+	/* Not working because of background-image */
+	/* background-color: skyblue; */
+	border: none;
+	font-weight: bold;
 }

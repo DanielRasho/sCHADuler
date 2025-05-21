@@ -23,10 +23,18 @@
   in {
     devShells = forAllSystems (system: let
       pkgs = nixpkgsFor.${system};
-      schedulingPkgs = [pkgs.gtk4 pkgs.pkg-config pkgs.bear];
     in {
       default = pkgs.mkShell {
-        packages = [pkgs.clang] ++ schedulingPkgs;
+        packages = [
+          # Dev Packages
+          pkgs.clang
+          pkgs.gf
+
+          # UI Packages
+          pkgs.gtk4
+          pkgs.pkg-config
+          pkgs.bear
+        ];
         shellHook = ''
           echo "THIS SHELL MUST BE STARTED FROM THE REPO ROOT!"
           mkdir build/ || echo "build/ Already exists!";

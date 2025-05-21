@@ -40,7 +40,7 @@ GtkWidget *MainButton(const char *label,
  * @return GtkWidget* The container of this view.
  */
 static GtkWidget *buildCalendarView(GtkWindow *window) {
-  GtkWidget *container = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 5);
+  GtkWidget *container = gtk_paned_new(GTK_ORIENTATION_HORIZONTAL);
   gtk_widget_set_vexpand(container, TRUE);
   gtk_widget_set_hexpand(container, TRUE);
 
@@ -49,6 +49,7 @@ static GtkWidget *buildCalendarView(GtkWindow *window) {
   gtk_widget_set_name(simContainer, "simContainer");
   gtk_widget_set_vexpand(simContainer, TRUE);
   gtk_widget_set_hexpand(simContainer, TRUE);
+  gtk_paned_set_start_child((GtkPaned *)container, simContainer);
 
   GtkWidget *simBox = gtk_box_new(GTK_ORIENTATION_VERTICAL, 1);
   gtk_widget_set_name(simBox, "simBox");
@@ -108,9 +109,41 @@ static GtkWidget *buildCalendarView(GtkWindow *window) {
   gtk_widget_set_name(controlsContainer, "controlsContainer");
   gtk_widget_set_hexpand(controlsContainer, TRUE);
   gtk_widget_set_vexpand(controlsContainer, TRUE);
+  gtk_paned_set_end_child((GtkPaned *)container, controlsContainer);
 
-  gtk_box_append((GtkBox *)container, simContainer);
-  gtk_box_append((GtkBox *)container, controlsContainer);
+  GtkWidget *algorithmSelectionContainer =
+      gtk_box_new(GTK_ORIENTATION_VERTICAL, 1);
+  gtk_widget_set_name(algorithmSelectionContainer,
+                      "algorithmSelectionContainer");
+  gtk_widget_set_hexpand(algorithmSelectionContainer, TRUE);
+  gtk_widget_set_vexpand(algorithmSelectionContainer, TRUE);
+  gtk_box_append((GtkBox *)controlsContainer, algorithmSelectionContainer);
+
+  const char *algoNames[] = {
+      "First In First Out", "Shortest Job First", "Shortest Remaining Time",
+      "Round Robin",        "Priority",
+  };
+  GtkWidget *group = gtk_check_button_new();
+  for (int i = 0; i < 5; i++) {
+    GtkWidget *checkBox = gtk_check_button_new_with_label(algoNames[i]);
+    gtk_box_append((GtkBox *)algorithmSelectionContainer, checkBox);
+    gtk_check_button_set_group((GtkCheckButton *)checkBox,
+                               (GtkCheckButton *)group);
+  }
+
+  GtkWidget *loadFileContainer = gtk_box_new(GTK_ORIENTATION_VERTICAL, 30);
+  gtk_widget_set_name(loadFileContainer, "loadFileContainer");
+  gtk_widget_set_hexpand(algorithmSelectionContainer, TRUE);
+  gtk_widget_set_vexpand(algorithmSelectionContainer, TRUE);
+  gtk_box_append((GtkBox *)controlsContainer, loadFileContainer);
+
+  GtkWidget *loadFileBtn = MainButton("Load File", NULL);
+  gtk_widget_set_valign(loadFileBtn, GTK_ALIGN_CENTER);
+  gtk_box_append((GtkBox *)loadFileContainer, loadFileBtn);
+
+  GtkWidget *quantumEntry = gtk_spin_button_new_with_range(0, 1000, 1);
+  gtk_widget_set_valign(quantumEntry, GTK_ALIGN_CENTER);
+  gtk_box_append((GtkBox *)loadFileContainer, quantumEntry);
 
   return container;
 }

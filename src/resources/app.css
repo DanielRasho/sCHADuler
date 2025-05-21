@@ -5,6 +5,7 @@
 
 #controlsContainer {
 	background-color: blue;
+	padding: 1rem;
 }
 
 #simBox {
@@ -14,6 +15,14 @@
 
 #processBox {
 	background-color: orange;
+}
+
+#algorithmSelectionContainer {
+	background-color: skyblue;
+}
+
+#loadFileContainer {
+	background-color: pink;
 }
 
 .h1_title{

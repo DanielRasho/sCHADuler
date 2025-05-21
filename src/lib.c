@@ -174,12 +174,53 @@ SC_String SC_String_from_c_string(char *c_str) {
 }
 
 typedef struct {
-  struct SC_Arena arena;
-} SC_StringBuilder;
-
-typedef struct {
-  SC_String pid;
+  size_t pid_idx;
   uint burst_time;
   uint arrival_time;
   uint priority;
 } SC_Process;
+
+typedef struct {
+  size_t count;
+  size_t capacity;
+  SC_Process processes[];
+} SC_FixedProcessList;
+
+/**
+ * Saves all the state needed to render a single step in the animation.
+ *
+ * Each step should own it's memory! So we can free one step and not affect all
+ * the others!
+ */
+typedef struct {
+  size_t current_process;
+  SC_FixedProcessList processes;
+} SC_SimStepState;
+
+/**
+ * Saves all the steps a simulation can have.
+ */
+typedef struct {
+  size_t step_max;
+  size_t current_step;
+  SC_SimStepState steps[];
+} SC_Simulation;
+
+/**
+ * Computes the FIFO scheduling simulation
+ *
+ * This method must compute the complete list of steps the simulation must
+ * render. EACH STEP MUST OWN it's data!
+ *
+ * @param arena SC_Arena The Arena to allocate everything that you need to copy
+ * over.
+ * @param processes SC_FixedProcessList The initial conditions of each process.
+ * @return SC_Simulation The simulation with all it's steps.
+ */
+SC_Simulation simulate_first_in_first_out(struct SC_Arena *arena,
+                                          SC_FixedProcessList *processes) {
+  // Guide to initialize arrays and use the arrays:
+  // https://en.wikipedia.org/wiki/Flexible_array_member
+  SC_Simulation sim = {};
+  return sim;
+}

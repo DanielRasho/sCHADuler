@@ -35,6 +35,11 @@ clang -o nob ./nob.c
 Then you can simply run the `nob -h` command to check the available actions you
 can take.
 
+```bash
+# For example you can compile the project in debug mode like so:
+./nob
+```
+
 ## Running the program
 
 You can always run the program in the normal way, but if you need to open the

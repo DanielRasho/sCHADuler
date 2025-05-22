@@ -226,7 +226,14 @@ void SC_String_TrySetCharAt(SC_String *str, size_t idx, char value,
   }
 }
 
-int SC_String_ToInt(SC_String *str, SC_Err err) {
+/**
+ * Tries to parse a SC_String into an integer.
+ *
+ * Ignores starting whitespace, it may or may not have a '-' sign at the
+ * beginning of the number stream. If any other character is found that isn't
+ * numbers on other positions, INVALID_STRING is set on the err.
+ */
+int SC_String_ParseInt(SC_String *str, SC_Err err) {
   if (str->length <= 0) {
     err = EMPTY_STRING;
     return 0;

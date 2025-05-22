@@ -8,10 +8,22 @@
 #include <stdlib.h>
 #include <string.h>
 
+// ################################
+// ||                            ||
+// ||          STRUCTS           ||
+// ||                            ||
+// ################################
+
 typedef struct {
   GtkWindow *window;
   GtkTextBuffer *buffer;
 } SC_OpenFileEVData;
+
+// ################################
+// ||                            ||
+// ||          HANDLERS          ||
+// ||                            ||
+// ################################
 
 static void print_hello(GtkWidget *widget, gpointer data) {
   g_print("Hello World\n");
@@ -21,7 +33,7 @@ static void file_dialog_finished(GObject *source_object, GAsyncResult *res,
                                  gpointer data) {
   GError **error = NULL;
   GFile *file =
-      gtk_file_dialog_open_finish((GtkFileDialog *)source_object, res, error);
+      gtk_file_dialog_open_finish(GTK_FILE_DIALOG(source_object), res, error);
   if (NULL != error) {
     SC_PANIC("An error occurred reading the file: `%s`!\n", (*error)->message);
     return;
@@ -87,7 +99,7 @@ GtkWidget *MainButton(const char *label,
  * it's not the parent container!
  * @return GtkWidget* The container of this view.
  */
-static GtkWidget *buildCalendarView(GtkWindow *window) {
+static GtkWidget *CalendarView(GtkWindow *window) {
   GtkWidget *container = gtk_paned_new(GTK_ORIENTATION_HORIZONTAL);
   gtk_widget_set_vexpand(container, TRUE);
   gtk_widget_set_hexpand(container, TRUE);
@@ -223,7 +235,7 @@ static GtkWidget *buildCalendarView(GtkWindow *window) {
  * it's not the parent container!
  * @return GtkWidget* The container of this view.
  */
-static GtkWidget *buildSyncView(GtkWindow *window) {
+static GtkWidget *SyncView(GtkWindow *window) {
   GtkWidget *button = gtk_button_new_with_label("Goodye world!");
 
   g_signal_connect(button, "clicked", G_CALLBACK(print_hello), NULL);
@@ -255,11 +267,11 @@ static void activate(GtkApplication *app, gpointer user_data) {
   gtk_header_bar_set_title_widget((GtkHeaderBar *)headerBar, tabSwitcher);
   gtk_window_set_titlebar((GtkWindow *)window, headerBar);
 
-  GtkWidget *calendarView = buildCalendarView((GtkWindow *)window);
+  GtkWidget *calendarView = CalendarView((GtkWindow *)window);
   gtk_stack_add_titled((GtkStack *)tabStack, calendarView, "Calendarizacion",
                        "Calendarizacion");
 
-  GtkWidget *sincronizationView = buildSyncView((GtkWindow *)window);
+  GtkWidget *sincronizationView = SyncView((GtkWindow *)window);
   gtk_stack_add_titled((GtkStack *)tabStack, sincronizationView,
                        "Sincronizacion", "Sincronizacion");
 

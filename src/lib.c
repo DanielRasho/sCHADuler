@@ -9,8 +9,29 @@ static const SC_Err NO_ERROR = (size_t *)0;
 static const SC_Err NOT_FOUND = (size_t *)1;
 static const SC_Err MALLOC_FAILED = (size_t *)2;
 static const SC_Err ARENA_ALLOC_NO_SPACE = (size_t *)3;
-static const SC_Err NO_SPACE_LEFT = (size_t *)4;
-static const SC_Err HASHMAP_INITIALIZATION_ERROR = (size_t *)5;
+static const SC_Err OUT_OF_BOUNDS = (size_t *)4;
+static const SC_Err EMPTY_STRING = (size_t *)5;
+static const SC_Err INVALID_STRING = (size_t *)6;
+
+static const char *SC_Err_ToString(SC_Err err) {
+  if (err == NO_ERROR) {
+    return "No error found!";
+  } else if (err == NOT_FOUND) {
+    return "Element was not found!";
+  } else if (err == MALLOC_FAILED) {
+    return "malloc failed! Maybe out of memory?";
+  } else if (err == ARENA_ALLOC_NO_SPACE) {
+    return "Arena is out of space!";
+  } else if (err == OUT_OF_BOUNDS) {
+    return "Tried to access an index out of bounds!";
+  } else if (err == EMPTY_STRING) {
+    return "Tried to do some operation on an empty string!";
+  } else if (err == INVALID_STRING) {
+    return "The supplied string is invalid for the operation!";
+  } else {
+    return "INVALID ERROR VALUE RECEIVED!";
+  }
+}
 
 typedef int SC_Bool;
 static const SC_Bool SC_TRUE = 1;
@@ -99,7 +120,7 @@ void SC_Arena_init(struct SC_Arena *arena, size_t initial_capacity,
 // Allocates the requested space on the arena.
 // If too little or no space is available, creates a new child arena and tries
 // to allocate in it!
-char *SC_Arena_alloc(struct SC_Arena *arena, size_t requested_size,
+void *SC_Arena_Alloc(struct SC_Arena *arena, size_t requested_size,
                      SC_Err err) {
 
   if (arena->deinited) {
@@ -113,7 +134,7 @@ char *SC_Arena_alloc(struct SC_Arena *arena, size_t requested_size,
     arena->count += requested_size;
     return p;
   } else if (NULL != arena->next) {
-    return SC_Arena_alloc(arena->next, requested_size, err);
+    return SC_Arena_Alloc(arena->next, requested_size, err);
   } else {
     size_t next_capacity = arena->capacity;
     if (next_capacity < requested_size) {
@@ -127,7 +148,7 @@ char *SC_Arena_alloc(struct SC_Arena *arena, size_t requested_size,
     }
     SC_Arena_init(arena->next, next_capacity, err);
 
-    return SC_Arena_alloc(arena->next, requested_size, err);
+    return SC_Arena_Alloc(arena->next, requested_size, err);
   }
 }
 
@@ -173,6 +194,103 @@ SC_String SC_String_from_c_string(char *c_str) {
   return str;
 }
 
+char SC_String_CharAt(SC_String *str, size_t idx) {
+  if (idx < 0 || idx >= str->length) {
+    SC_PANIC("Trying to access an invalid Index! %d from %*s", idx, str->length,
+             str->data);
+    return 0;
+  } else {
+    return str->data[idx];
+  }
+}
+
+SC_String SC_String_CopyOnArena(struct SC_Arena *arena, SC_String *other,
+                                SC_Err err) {
+  SC_String str = {};
+  str.data = SC_Arena_Alloc(arena, other->length, err);
+  if (err != NO_ERROR) {
+    return str;
+  }
+
+  memcpy(str.data, other->data, other->length);
+
+  return str;
+}
+
+void SC_String_TrySetCharAt(SC_String *str, size_t idx, char value,
+                            SC_Err err) {
+  if (idx < 0 || idx >= str->length) {
+    err = OUT_OF_BOUNDS;
+  } else {
+    str->data[idx] = value;
+  }
+}
+
+int SC_String_ToInt(SC_String *str, SC_Err err) {
+  if (str->length <= 0) {
+    err = EMPTY_STRING;
+    return 0;
+  }
+
+  int result = 0;
+  int current_factor = 1;
+  for (int i = str->length - 1; i > -1; i--) {
+    char digit = SC_String_CharAt(str, i);
+    switch (digit) {
+    case '1' ... '9': {
+      result += (digit - '0') * current_factor;
+      current_factor *= 10;
+    } break;
+    case '-': {
+      if (result != 0) {
+        err = INVALID_STRING;
+        return 0;
+      }
+
+      current_factor *= -1;
+    } break;
+
+    case ' ' | '\t' | '\n' | '\r': {
+      if (result != 0) {
+        err = INVALID_STRING;
+        return 0;
+      }
+    } break;
+
+    default: {
+      err = INVALID_STRING;
+      return 0;
+    } break;
+    }
+  }
+
+  return result;
+}
+
+typedef struct {
+  size_t capacity;
+  size_t count;
+  SC_String data[];
+} SC_StringList;
+
+SC_StringList *SC_StringList_NewWithArena(struct SC_Arena *arena,
+                                          size_t capacity) {
+  SC_Err err = NO_ERROR;
+  SC_StringList *list = SC_Arena_Alloc(
+      arena, sizeof(SC_StringList) + sizeof(SC_String) * capacity, err);
+  return list;
+}
+
+void SC_StringList_Append(SC_StringList *list, SC_String str, SC_Err err) {
+  if (list->count >= list->capacity) {
+    err = OUT_OF_BOUNDS;
+    return;
+  }
+
+  list->data[list->count] = str;
+  list->count++;
+}
+
 typedef struct {
   size_t pid_idx;
   uint burst_time;
@@ -184,17 +302,17 @@ typedef struct {
   size_t count;
   size_t capacity;
   SC_Process processes[];
-} SC_FixedProcessList;
+} SC_ProcessList;
 
 /**
  * Saves all the state needed to render a single step in the animation.
  *
- * Each step should own it's memory! So we can free one step and not affect all
- * the others!
+ * Each step should own it's memory! So we can free one step and not affect
+ * all the others!
  */
 typedef struct {
   size_t current_process;
-  SC_FixedProcessList processes;
+  SC_ProcessList processes;
 } SC_SimStepState;
 
 /**
@@ -212,15 +330,59 @@ typedef struct {
  * This method must compute the complete list of steps the simulation must
  * render. EACH STEP MUST OWN it's data!
  *
- * @param arena SC_Arena The Arena to allocate everything that you need to copy
- * over.
- * @param processes SC_FixedProcessList The initial conditions of each process.
+ * @param arena SC_Arena The Arena to allocate everything that you need to
+ * copy over.
+ * @param processes SC_FixedProcessList The initial conditions of each
+ * process.
  * @return SC_Simulation The simulation with all it's steps.
  */
-SC_Simulation simulate_first_in_first_out(struct SC_Arena *arena,
-                                          SC_FixedProcessList *processes) {
+void simulate_first_in_first_out(SC_ProcessList *processes,
+                                 SC_Simulation *sim) {
   // Guide to initialize arrays and use the arrays:
   // https://en.wikipedia.org/wiki/Flexible_array_member
-  SC_Simulation sim = {};
-  return sim;
+}
+
+void parse_scheduling_file(SC_String *file_contents, struct SC_Arena *arena,
+                           SC_StringList *pid_list, SC_ProcessList *processes,
+                           SC_Err err) {
+  char buff[255]; // Max length of a column
+  SC_String buffer = {
+      .data = buff,
+      .length = 0,
+  };
+  SC_Process current_process;
+
+  int current_column = 1;
+  for (int i = 0; i < file_contents->length; i++) {
+    char current_byte = SC_String_CharAt(file_contents, i);
+    switch (current_byte) {
+    case '\n':
+      current_column = 1;
+
+    case ',': {
+      if (1 == current_column) {
+        SC_String pid_str = SC_String_CopyOnArena(arena, &buffer, err);
+        if (err != NO_ERROR) {
+          return;
+        }
+
+        SC_StringList_Append(pid_list, pid_str, err);
+        if (err != NO_ERROR) {
+          return;
+        }
+        current_process.pid_idx = pid_list->count - 1;
+      } else {
+        // TODO: Transform digit into string...
+      }
+      current_column++;
+    } break;
+
+    default: {
+      SC_String_TrySetCharAt(&buffer, buffer.length, current_byte, err);
+      if (err != NO_ERROR) {
+        return;
+      }
+    }
+    }
+  }
 }

@@ -104,7 +104,7 @@ struct SC_Arena {
  *	// Do something in case of success!
  * }
  */
-void SC_Arena_init(struct SC_Arena *arena, size_t initial_capacity,
+void SC_Arena_Init(struct SC_Arena *arena, size_t initial_capacity,
                    SC_Err err) {
 
   char *data = malloc(initial_capacity);
@@ -149,7 +149,7 @@ void *SC_Arena_Alloc(struct SC_Arena *arena, size_t requested_size,
       err = MALLOC_FAILED;
       return NULL;
     }
-    SC_Arena_init(arena->next, next_capacity, err);
+    SC_Arena_Init(arena->next, next_capacity, err);
 
     return SC_Arena_Alloc(arena->next, requested_size, err);
   }
@@ -159,28 +159,28 @@ void *SC_Arena_Alloc(struct SC_Arena *arena, size_t requested_size,
 // All data is kept, you simply override it when writing to it.
 //
 // All child arenas are reset too!
-void SC_Arena_reset(struct SC_Arena *arena) {
+void SC_Arena_Reset(struct SC_Arena *arena) {
   if (arena->deinited) {
     SC_PANIC("Can reset an arena that is already deinited!");
     return;
   }
 
   if (NULL != arena->next) {
-    SC_Arena_reset(arena->next);
+    SC_Arena_Reset(arena->next);
   }
 
   arena->count = 0;
 }
 
 // Frees the memory associated with this arena.
-void SC_Arena_deinit(struct SC_Arena *arena) {
+void SC_Arena_Deinit(struct SC_Arena *arena) {
   if (arena->deinited) {
     SC_PANIC("An arena should not be deinited more than 1 time!");
     return;
   }
 
   if (NULL != arena->next) {
-    SC_Arena_deinit(arena->next);
+    SC_Arena_Deinit(arena->next);
   }
 
   free(arena->data);
@@ -193,7 +193,7 @@ typedef struct {
   size_t data_capacity;
 } SC_String;
 
-SC_String SC_String_from_c_string(char *c_str) {
+SC_String SC_String_FromCString(char *c_str) {
   SC_String str = {
       .length = strlen(c_str),
       .data = c_str,
@@ -222,6 +222,7 @@ SC_String SC_String_CopyOnArena(struct SC_Arena *arena, SC_String *other,
 
   memcpy(str.data, other->data, other->length);
   str.data_capacity = other->length;
+  str.length = other->length;
 
   return str;
 }
@@ -258,7 +259,7 @@ int SC_String_ParseInt(SC_String *str, SC_Err err) {
   for (int i = str->length - 1; i > -1; i--) {
     char digit = SC_String_CharAt(str, i);
     switch (digit) {
-    case '1' ... '9': {
+    case '0' ... '9': {
       result += (digit - '0') * current_factor;
       current_factor *= 10;
     } break;
@@ -299,7 +300,13 @@ typedef struct {
   struct SC_StringList_Node *tail;
 } SC_StringList;
 
-void SC_StringList_init(SC_StringList *list) {
+void SC_StringList_Init(SC_StringList *list) {
+  list->count = 0;
+  list->head = NULL;
+  list->tail = NULL;
+}
+
+void SC_StringList_Reset(SC_StringList *list) {
   list->count = 0;
   list->head = NULL;
   list->tail = NULL;
@@ -359,7 +366,13 @@ typedef struct {
   struct SC_ProcessList_Node *tail;
 } SC_ProcessList;
 
-void SC_ProcessList_init(SC_ProcessList *list) {
+void SC_ProcessList_Init(SC_ProcessList *list) {
+  list->count = 0;
+  list->head = NULL;
+  list->tail = NULL;
+}
+
+void SC_ProcessList_Reset(SC_ProcessList *list) {
   list->count = 0;
   list->head = NULL;
   list->tail = NULL;
@@ -446,9 +459,11 @@ void parse_scheduling_file(SC_String *file_contents,
   for (int i = 0; i < file_contents->length; i++) {
     char current_char = SC_String_CharAt(file_contents, i);
     switch (current_char) {
+    case ' ': {
+    } break;
     case '\n': {
 
-      if (3 != current_column) {
+      if (4 != current_column) {
         err = INVALID_TXT_FILE;
         return;
       }

@@ -31,6 +31,17 @@ typedef struct {
 
 // ################################
 // ||                            ||
+// ||        GLOBAL STATE        ||
+// ||                            ||
+// ################################
+
+static struct SC_Arena PROCESS_LIST_ARENA;
+static struct SC_Arena PIDS_ARENA;
+static SC_ProcessList PROCESS_LIST;
+static SC_StringList PID_LIST;
+
+// ################################
+// ||                            ||
 // ||          HANDLERS          ||
 // ||                            ||
 // ################################
@@ -64,10 +75,30 @@ static void file_dialog_finished(GObject *source_object, GAsyncResult *res,
     return;
   }
 
-  fprintf(stderr, "The file contents are:\n%*s\n", (int)length, contents);
+  SC_String file_contents = {
+      .length = length,
+      .data = contents,
+      .data_capacity = length,
+  };
+  fprintf(stderr, "The file contents are:\n%*s\n", (int)file_contents.length,
+          file_contents.data);
 
   SC_OpenFileEVData *ev_data = (SC_OpenFileEVData *)data;
   gtk_text_buffer_set_text(ev_data->buffer, contents, length);
+
+  SC_Arena_Reset(&PIDS_ARENA);
+  SC_Arena_Reset(&PROCESS_LIST_ARENA);
+  SC_StringList_Reset(&PID_LIST);
+  SC_ProcessList_Reset(&PROCESS_LIST);
+
+  SC_Err err = NO_ERROR;
+  parse_scheduling_file(&file_contents, &PIDS_ARENA, &PROCESS_LIST_ARENA,
+                        &PID_LIST, &PROCESS_LIST, err);
+  if (err != NO_ERROR) {
+    fprintf(stderr, "ERROR: %s", SC_Err_ToString(err));
+  } else {
+    fprintf(stderr, "Correctly parsed the file!");
+  }
 }
 
 static void handle_open_file_click(GtkWidget *widget, gpointer data) {
@@ -288,35 +319,24 @@ static void activate(GtkApplication *app, gpointer user_data) {
   gtk_window_present(GTK_WINDOW(window));
 }
 
-// ################################
-// ||                            ||
-// ||        GLOBAL STATE        ||
-// ||                            ||
-// ################################
-
-static struct SC_Arena PROCESS_LIST_ARENA;
-static struct SC_Arena PIDS_ARENA;
-static SC_ProcessList PROCESS_LIST;
-static SC_StringList PID_LIST;
-
 int main(int argc, char **argv) {
-  SC_ProcessList_init(&PROCESS_LIST);
-  SC_StringList_init(&PID_LIST);
+  SC_ProcessList_Init(&PROCESS_LIST);
+  SC_StringList_Init(&PID_LIST);
 
   SC_Err err = NO_ERROR;
-  SC_Arena_init(&PROCESS_LIST_ARENA, sizeof(SC_Process) * INITIAL_PROCESSES,
+  SC_Arena_Init(&PROCESS_LIST_ARENA, sizeof(SC_Process) * INITIAL_PROCESSES,
                 err);
   if (err != NO_ERROR) {
     fprintf(stderr, "FATAL: Failed to initialize process arena!");
     return 1;
   }
 
-  SC_Arena_init(&PIDS_ARENA,
+  SC_Arena_Init(&PIDS_ARENA,
                 (sizeof(SC_String) + sizeof(char) * 10) * INITIAL_PROCESSES,
                 err);
   if (err != NO_ERROR) {
     fprintf(stderr, "FATAL: Failed to initialize pids arena!");
-    SC_Arena_deinit(&PROCESS_LIST_ARENA);
+    SC_Arena_Deinit(&PROCESS_LIST_ARENA);
     return 1;
   }
 
@@ -328,8 +348,8 @@ int main(int argc, char **argv) {
   GdkDisplay *display = gdk_display_get_default();
   if (display == NULL) {
     fprintf(stderr, "FATAL: No GDK display found!");
-    SC_Arena_deinit(&PROCESS_LIST_ARENA);
-    SC_Arena_deinit(&PIDS_ARENA);
+    SC_Arena_Deinit(&PROCESS_LIST_ARENA);
+    SC_Arena_Deinit(&PIDS_ARENA);
     return 1;
   }
 
@@ -344,7 +364,7 @@ int main(int argc, char **argv) {
   int status = g_application_run(G_APPLICATION(app), argc, argv);
   g_object_unref(app);
 
-  SC_Arena_deinit(&PROCESS_LIST_ARENA);
-  SC_Arena_deinit(&PIDS_ARENA);
+  SC_Arena_Deinit(&PROCESS_LIST_ARENA);
+  SC_Arena_Deinit(&PIDS_ARENA);
   return status;
 }

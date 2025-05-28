@@ -12,6 +12,7 @@ static const SC_Err ARENA_ALLOC_NO_SPACE = (size_t *)3;
 static const SC_Err OUT_OF_BOUNDS = (size_t *)4;
 static const SC_Err EMPTY_STRING = (size_t *)5;
 static const SC_Err INVALID_STRING = (size_t *)6;
+static const SC_Err INVALID_TXT_FILE = (size_t *)7;
 
 static const char *SC_Err_ToString(SC_Err err) {
   if (err == NO_ERROR) {
@@ -28,6 +29,8 @@ static const char *SC_Err_ToString(SC_Err err) {
     return "Tried to do some operation on an empty string!";
   } else if (err == INVALID_STRING) {
     return "The supplied string is invalid for the operation!";
+  } else if (err == INVALID_TXT_FILE) {
+    return "The supplied TXT file is invalid!";
   } else {
     return "INVALID ERROR VALUE RECEIVED!";
   }
@@ -187,10 +190,15 @@ void SC_Arena_deinit(struct SC_Arena *arena) {
 typedef struct {
   char *data;
   size_t length;
+  size_t data_capacity;
 } SC_String;
 
 SC_String SC_String_from_c_string(char *c_str) {
-  SC_String str = {.length = strlen(c_str), .data = c_str};
+  SC_String str = {
+      .length = strlen(c_str),
+      .data = c_str,
+      .data_capacity = strlen(c_str),
+  };
   return str;
 }
 
@@ -213,16 +221,22 @@ SC_String SC_String_CopyOnArena(struct SC_Arena *arena, SC_String *other,
   }
 
   memcpy(str.data, other->data, other->length);
+  str.data_capacity = other->length;
 
   return str;
 }
 
-void SC_String_TrySetCharAt(SC_String *str, size_t idx, char value,
-                            SC_Err err) {
-  if (idx < 0 || idx >= str->length) {
+/**
+ * Tries to append a character at the end of the string.
+ *
+ * This function fails if no capacity available to hold the value.
+ */
+void SC_String_AppendChar(SC_String *str, char value, SC_Err err) {
+  if (str->length >= str->data_capacity) {
     err = OUT_OF_BOUNDS;
   } else {
-    str->data[idx] = value;
+    str->data[str->length] = value;
+    str->length++;
   }
 }
 
@@ -311,6 +325,17 @@ typedef struct {
   SC_Process processes[];
 } SC_ProcessList;
 
+void SC_ProcessList_Append(SC_ProcessList *list, SC_Process process,
+                           SC_Err err) {
+  if (list->count >= list->capacity) {
+    err = OUT_OF_BOUNDS;
+    return;
+  }
+
+  list->processes[list->count] = process;
+  list->count++;
+}
+
 /**
  * Saves all the state needed to render a single step in the animation.
  *
@@ -352,18 +377,37 @@ void simulate_first_in_first_out(SC_ProcessList *processes,
 void parse_scheduling_file(SC_String *file_contents, struct SC_Arena *arena,
                            SC_StringList *pid_list, SC_ProcessList *processes,
                            SC_Err err) {
-  char buff[255]; // Max length of a column
+  const int b_max_length = 255;
+  char b_data[b_max_length]; // Max length of a column
   SC_String buffer = {
-      .data = buff,
+      .data = b_data,
       .length = 0,
+      .data_capacity = b_max_length,
   };
   SC_Process current_process;
 
   int current_column = 1;
   for (int i = 0; i < file_contents->length; i++) {
-    char current_byte = SC_String_CharAt(file_contents, i);
-    switch (current_byte) {
+    char current_char = SC_String_CharAt(file_contents, i);
+    switch (current_char) {
     case '\n':
+      if (3 != current_column) {
+        err = INVALID_TXT_FILE;
+        return;
+      }
+
+      int column_value = SC_String_ParseInt(&buffer, err);
+      if (err != NO_ERROR) {
+        return;
+      }
+      current_process.priority = column_value;
+
+      SC_ProcessList_Append(processes, current_process, err);
+      if (err != NO_ERROR) {
+        return;
+      }
+
+      buffer.length = 0;
       current_column = 1;
 
     case ',': {
@@ -379,13 +423,27 @@ void parse_scheduling_file(SC_String *file_contents, struct SC_Arena *arena,
         }
         current_process.pid_idx = pid_list->count - 1;
       } else {
-        // TODO: Transform digit into string...
+        int column_value = SC_String_ParseInt(&buffer, err);
+        if (err != NO_ERROR) {
+          return;
+        }
+
+        if (2 == current_column) {
+          current_process.burst_time = column_value;
+        } else if (3 == current_column) {
+          current_process.arrival_time = column_value;
+        } else {
+          err = INVALID_TXT_FILE;
+          return;
+        }
       }
+
+      buffer.length = 0;
       current_column++;
     } break;
 
     default: {
-      SC_String_TrySetCharAt(&buffer, buffer.length, current_byte, err);
+      SC_String_AppendChar(&buffer, current_char, err);
       if (err != NO_ERROR) {
         return;
       }

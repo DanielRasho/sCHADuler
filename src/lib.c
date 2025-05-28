@@ -288,27 +288,56 @@ int SC_String_ParseInt(SC_String *str, SC_Err err) {
   return result;
 }
 
+struct SC_StringList_Node {
+  SC_String value;
+  struct SC_StringList_Node *next;
+};
+
 typedef struct {
-  size_t capacity;
   size_t count;
-  SC_String data[];
+  struct SC_StringList_Node *head;
+  struct SC_StringList_Node *tail;
 } SC_StringList;
 
-SC_StringList *SC_StringList_NewWithArena(struct SC_Arena *arena,
-                                          size_t capacity) {
-  SC_Err err = NO_ERROR;
-  SC_StringList *list = SC_Arena_Alloc(
-      arena, sizeof(SC_StringList) + sizeof(SC_String) * capacity, err);
-  return list;
+void SC_StringList_init(SC_StringList *list) {
+  list->count = 0;
+  list->head = NULL;
+  list->tail = NULL;
 }
 
-void SC_StringList_Append(SC_StringList *list, SC_String str, SC_Err err) {
-  if (list->count >= list->capacity) {
-    err = OUT_OF_BOUNDS;
+/**
+ * Appends the string at the end of the list.
+ *
+ * It copies the string to the supplied arena, make sure the string list lives
+ * at least as long as the arena so no data corruption is done.
+ */
+void SC_StringList_Append(SC_StringList *list, struct SC_Arena *arena,
+                          SC_String str, SC_Err err) {
+  struct SC_StringList_Node *node =
+      SC_Arena_Alloc(arena, sizeof(struct SC_StringList_Node), err);
+  if (err != NO_ERROR) {
     return;
   }
 
-  list->data[list->count] = str;
+  SC_String new_str = SC_String_CopyOnArena(arena, &str, err);
+  if (err != NO_ERROR) {
+    return;
+  }
+
+  node->value = new_str;
+  node->next = NULL;
+
+  if (list->count == 0) {
+    list->head = node;
+    list->tail = node;
+  } else if (list->count == 1) {
+    list->head->next = node;
+    list->tail = node;
+  } else {
+    list->tail->next = node;
+    list->tail = node;
+  }
+
   list->count++;
 }
 
@@ -319,20 +348,45 @@ typedef struct {
   uint priority;
 } SC_Process;
 
+struct SC_ProcessList_Node {
+  SC_Process value;
+  struct SC_ProcessList_Node *next;
+};
+
 typedef struct {
   size_t count;
-  size_t capacity;
-  SC_Process processes[];
+  struct SC_ProcessList_Node *head;
+  struct SC_ProcessList_Node *tail;
 } SC_ProcessList;
 
-void SC_ProcessList_Append(SC_ProcessList *list, SC_Process process,
-                           SC_Err err) {
-  if (list->count >= list->capacity) {
-    err = OUT_OF_BOUNDS;
+void SC_ProcessList_init(SC_ProcessList *list) {
+  list->count = 0;
+  list->head = NULL;
+  list->tail = NULL;
+}
+
+void SC_ProcessList_Append(SC_ProcessList *list, struct SC_Arena *arena,
+                           SC_Process process, SC_Err err) {
+  struct SC_ProcessList_Node *node =
+      SC_Arena_Alloc(arena, sizeof(struct SC_ProcessList_Node), err);
+  if (err != NO_ERROR) {
     return;
   }
 
-  list->processes[list->count] = process;
+  node->value = process;
+  node->next = NULL;
+
+  if (list->count == 0) {
+    list->head = node;
+    list->tail = node;
+  } else if (list->count == 1) {
+    list->head->next = node;
+    list->tail = node;
+  } else {
+    list->tail->next = node;
+    list->tail = node;
+  }
+
   list->count++;
 }
 
@@ -374,7 +428,9 @@ void simulate_first_in_first_out(SC_ProcessList *processes,
   // https://en.wikipedia.org/wiki/Flexible_array_member
 }
 
-void parse_scheduling_file(SC_String *file_contents, struct SC_Arena *arena,
+void parse_scheduling_file(SC_String *file_contents,
+                           struct SC_Arena *pids_arena,
+                           struct SC_Arena *processes_arena,
                            SC_StringList *pid_list, SC_ProcessList *processes,
                            SC_Err err) {
   const int b_max_length = 255;
@@ -384,13 +440,14 @@ void parse_scheduling_file(SC_String *file_contents, struct SC_Arena *arena,
       .length = 0,
       .data_capacity = b_max_length,
   };
-  SC_Process current_process;
+  SC_Process current_process = {0};
 
   int current_column = 1;
   for (int i = 0; i < file_contents->length; i++) {
     char current_char = SC_String_CharAt(file_contents, i);
     switch (current_char) {
-    case '\n':
+    case '\n': {
+
       if (3 != current_column) {
         err = INVALID_TXT_FILE;
         return;
@@ -402,22 +459,20 @@ void parse_scheduling_file(SC_String *file_contents, struct SC_Arena *arena,
       }
       current_process.priority = column_value;
 
-      SC_ProcessList_Append(processes, current_process, err);
+      SC_ProcessList_Append(processes, processes_arena, current_process, err);
       if (err != NO_ERROR) {
         return;
       }
 
       buffer.length = 0;
       current_column = 1;
+      SC_Process zero_process = {0};
+      current_process = zero_process;
+    } break;
 
     case ',': {
       if (1 == current_column) {
-        SC_String pid_str = SC_String_CopyOnArena(arena, &buffer, err);
-        if (err != NO_ERROR) {
-          return;
-        }
-
-        SC_StringList_Append(pid_list, pid_str, err);
+        SC_StringList_Append(pid_list, pids_arena, buffer, err);
         if (err != NO_ERROR) {
           return;
         }

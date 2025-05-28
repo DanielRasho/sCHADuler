@@ -10,6 +10,16 @@
 
 // ################################
 // ||                            ||
+// ||         CONSTANTS          ||
+// ||                            ||
+// ################################
+
+// The program preallocates enough space for this processes.
+// If more than this quantity is required it allocates more.
+const static size_t INITIAL_PROCESSES = 15;
+
+// ################################
+// ||                            ||
 // ||          STRUCTS           ||
 // ||                            ||
 // ################################
@@ -278,7 +288,38 @@ static void activate(GtkApplication *app, gpointer user_data) {
   gtk_window_present(GTK_WINDOW(window));
 }
 
+// ################################
+// ||                            ||
+// ||        GLOBAL STATE        ||
+// ||                            ||
+// ################################
+
+static struct SC_Arena PROCESS_LIST_ARENA;
+static struct SC_Arena PIDS_ARENA;
+static SC_ProcessList PROCESS_LIST;
+static SC_StringList PID_LIST;
+
 int main(int argc, char **argv) {
+  SC_ProcessList_init(&PROCESS_LIST);
+  SC_StringList_init(&PID_LIST);
+
+  SC_Err err = NO_ERROR;
+  SC_Arena_init(&PROCESS_LIST_ARENA, sizeof(SC_Process) * INITIAL_PROCESSES,
+                err);
+  if (err != NO_ERROR) {
+    fprintf(stderr, "FATAL: Failed to initialize process arena!");
+    return 1;
+  }
+
+  SC_Arena_init(&PIDS_ARENA,
+                (sizeof(SC_String) + sizeof(char) * 10) * INITIAL_PROCESSES,
+                err);
+  if (err != NO_ERROR) {
+    fprintf(stderr, "FATAL: Failed to initialize pids arena!");
+    SC_Arena_deinit(&PROCESS_LIST_ARENA);
+    return 1;
+  }
+
   gtk_init();
 
   GtkApplication *app = gtk_application_new("uwu.uvgenios.schaduler",
@@ -287,6 +328,8 @@ int main(int argc, char **argv) {
   GdkDisplay *display = gdk_display_get_default();
   if (display == NULL) {
     fprintf(stderr, "FATAL: No GDK display found!");
+    SC_Arena_deinit(&PROCESS_LIST_ARENA);
+    SC_Arena_deinit(&PIDS_ARENA);
     return 1;
   }
 
@@ -301,5 +344,7 @@ int main(int argc, char **argv) {
   int status = g_application_run(G_APPLICATION(app), argc, argv);
   g_object_unref(app);
 
+  SC_Arena_deinit(&PROCESS_LIST_ARENA);
+  SC_Arena_deinit(&PIDS_ARENA);
   return status;
 }

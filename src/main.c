@@ -29,15 +29,30 @@ typedef struct {
   GtkTextBuffer *buffer;
 } SC_OpenFileEVData;
 
+typedef enum {
+  SC_FirstInFirstOut,
+  SC_ShortestFirst,
+  SC_ShortestRemaining,
+  SC_RoundRobin,
+  SC_Priority
+} SC_Algorithm;
+
 // ################################
 // ||                            ||
 // ||        GLOBAL STATE        ||
 // ||                            ||
 // ################################
 
+// The currently selected algorithm.
+static SC_Algorithm SELECTED_ALGORITHM = SC_FirstInFirstOut;
+
+// Arena used to store all data associated with an `SC_Simulation`.
+static struct SC_Arena SIM_ARENA;
+
 static struct SC_Arena PROCESS_LIST_ARENA;
-static struct SC_Arena PIDS_ARENA;
 static SC_ProcessList PROCESS_LIST;
+
+static struct SC_Arena PIDS_ARENA;
 static SC_StringList PID_LIST;
 
 // ################################
@@ -98,6 +113,35 @@ static void file_dialog_finished(GObject *source_object, GAsyncResult *res,
     fprintf(stderr, "ERROR: %s", SC_Err_ToString(err));
   } else {
     fprintf(stderr, "Correctly parsed the file!");
+  }
+
+  size_t total_processes = PROCESS_LIST.count;
+  size_t total_steps = 0;
+  struct SC_ProcessList_Node *current = PROCESS_LIST.head;
+  for (size_t i = 0; i < total_processes; i++) {
+    total_steps += current->value.burst_time;
+    current = current->next;
+  }
+
+  SC_Arena_Reset(&SIM_ARENA);
+  SC_Simulation *sim = SC_Arena_Alloc(
+      &SIM_ARENA,
+      sizeof(SC_Simulation) +
+          (sizeof(SC_SimStepState) + sizeof(SC_Process) * total_processes) *
+              total_steps,
+      err);
+  if (err != NO_ERROR) {
+    fprintf(stderr, "ERROR: %s", SC_Err_ToString(err));
+    exit(1);
+  }
+
+  sim->step_length = total_steps;
+  for (size_t i = 0; i < total_steps; i++) {
+    sim->steps[i].process_length = total_processes;
+  }
+
+  if (SELECTED_ALGORITHM == SC_FirstInFirstOut) {
+    simulate_first_in_first_out(&PROCESS_LIST, sim);
   }
 }
 
@@ -340,6 +384,19 @@ int main(int argc, char **argv) {
     return 1;
   }
 
+  SC_Arena_Init(
+      &SIM_ARENA,
+      sizeof(SC_Simulation) +
+          (sizeof(SC_SimStepState) + sizeof(SC_Process) * INITIAL_PROCESSES) *
+              INITIAL_PROCESSES * 5,
+      err);
+  if (err != NO_ERROR) {
+    fprintf(stderr, "FATAL: Failed to initialize simulation arena!");
+    SC_Arena_Deinit(&PROCESS_LIST_ARENA);
+    SC_Arena_Deinit(&PIDS_ARENA);
+    return 1;
+  }
+
   gtk_init();
 
   GtkApplication *app = gtk_application_new("uwu.uvgenios.schaduler",
@@ -350,6 +407,7 @@ int main(int argc, char **argv) {
     fprintf(stderr, "FATAL: No GDK display found!");
     SC_Arena_Deinit(&PROCESS_LIST_ARENA);
     SC_Arena_Deinit(&PIDS_ARENA);
+    SC_Arena_Deinit(&SIM_ARENA);
     return 1;
   }
 
@@ -366,5 +424,6 @@ int main(int argc, char **argv) {
 
   SC_Arena_Deinit(&PROCESS_LIST_ARENA);
   SC_Arena_Deinit(&PIDS_ARENA);
+  SC_Arena_Deinit(&SIM_ARENA);
   return status;
 }

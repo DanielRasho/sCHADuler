@@ -411,14 +411,15 @@ void SC_ProcessList_Append(SC_ProcessList *list, struct SC_Arena *arena,
  */
 typedef struct {
   size_t current_process;
-  SC_ProcessList processes;
+  size_t process_length;
+  SC_Process processes[];
 } SC_SimStepState;
 
 /**
  * Saves all the steps a simulation can have.
  */
 typedef struct {
-  size_t step_max;
+  size_t step_length;
   size_t current_step;
   SC_SimStepState steps[];
 } SC_Simulation;
@@ -426,13 +427,10 @@ typedef struct {
 /**
  * Computes the FIFO scheduling simulation
  *
- * This method must compute the complete list of steps the simulation must
- * render. EACH STEP MUST OWN it's data!
- *
- * @param arena SC_Arena The Arena to allocate everything that you need to
- * copy over.
- * @param processes SC_FixedProcessList The initial conditions of each
+ * @param processes *SC_ProcessList The initial conditions of each
  * process.
+ * @param sim *SC_Simulation The simulation state to fill with all the sim step
+ * data.
  * @return SC_Simulation The simulation with all it's steps.
  */
 void simulate_first_in_first_out(SC_ProcessList *processes,

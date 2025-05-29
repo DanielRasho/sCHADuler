@@ -29,13 +29,12 @@ typedef struct {
   GtkTextBuffer *buffer;
 } SC_OpenFileEVData;
 
-typedef enum {
-  SC_FirstInFirstOut,
-  SC_ShortestFirst,
-  SC_ShortestRemaining,
-  SC_RoundRobin,
-  SC_Priority
-} SC_Algorithm;
+typedef int SC_Algorithm;
+static SC_Algorithm SC_FirstInFirstOut = 1;
+static SC_Algorithm SC_ShortestFirst = 2;
+static SC_Algorithm SC_ShortestRemaining = 3;
+static SC_Algorithm SC_RoundRobin = 4;
+static SC_Algorithm SC_Priority = 5;
 
 // ################################
 // ||                            ||
@@ -44,7 +43,7 @@ typedef enum {
 // ################################
 
 // The currently selected algorithm.
-static SC_Algorithm SELECTED_ALGORITHM = SC_FirstInFirstOut;
+static SC_Algorithm SELECTED_ALGORITHM;
 
 // Arena used to store all data associated with an `SC_Simulation`.
 static struct SC_Arena SIM_ARENA;
@@ -63,6 +62,12 @@ static SC_StringList PID_LIST;
 
 static void print_hello(GtkWidget *widget, gpointer data) {
   g_print("Hello World\n");
+}
+
+static void change_selected_algorithm(GtkCheckButton *self, gpointer *data) {
+  SC_Algorithm algo = *(SC_Algorithm *)data;
+  SELECTED_ALGORITHM = algo;
+  fprintf(stderr, "Changing selected algorithm to: %d\n", SELECTED_ALGORITHM);
 }
 
 static void file_dialog_finished(GObject *source_object, GAsyncResult *res,
@@ -281,6 +286,26 @@ static GtkWidget *CalendarView(GtkWindow *window) {
     gtk_box_append(GTK_BOX(algorithmSelectionContainer), checkBox);
     gtk_check_button_set_group(GTK_CHECK_BUTTON(checkBox),
                                GTK_CHECK_BUTTON(group));
+    if (i == 0) {
+      g_signal_connect(checkBox, "toggled",
+                       G_CALLBACK(change_selected_algorithm),
+                       &SC_FirstInFirstOut);
+      gtk_check_button_set_active(GTK_CHECK_BUTTON(checkBox), TRUE);
+    } else if (i == 1) {
+      g_signal_connect(checkBox, "toggled",
+                       G_CALLBACK(change_selected_algorithm),
+                       &SC_ShortestFirst);
+    } else if (i == 2) {
+      g_signal_connect(checkBox, "toggled",
+                       G_CALLBACK(change_selected_algorithm),
+                       &SC_ShortestRemaining);
+    } else if (i == 3) {
+      g_signal_connect(checkBox, "toggled",
+                       G_CALLBACK(change_selected_algorithm), &SC_RoundRobin);
+    } else if (i == 4) {
+      g_signal_connect(checkBox, "toggled",
+                       G_CALLBACK(change_selected_algorithm), &SC_Priority);
+    }
   }
 
   GtkWidget *avgLabel = gtk_label_new("AVG: 0");

@@ -54,6 +54,8 @@ static SC_ProcessList PROCESS_LIST;
 static struct SC_Arena PIDS_ARENA;
 static SC_StringList PID_LIST;
 
+static SC_Simulation *SIM_STATE;
+
 // ################################
 // ||                            ||
 // ||          HANDLERS          ||
@@ -129,7 +131,7 @@ static void file_dialog_finished(GObject *source_object, GAsyncResult *res,
   }
 
   SC_Arena_Reset(&SIM_ARENA);
-  SC_Simulation *sim = SC_Arena_Alloc(
+  SIM_STATE = SC_Arena_Alloc(
       &SIM_ARENA,
       sizeof(SC_Simulation) +
           (sizeof(SC_SimStepState) + sizeof(SC_Process) * total_processes) *
@@ -140,14 +142,15 @@ static void file_dialog_finished(GObject *source_object, GAsyncResult *res,
     exit(1);
   }
 
-  sim->step_length = total_steps;
+  SIM_STATE->step_length = total_steps;
   for (size_t i = 0; i < total_steps; i++) {
-    sim->steps[i].process_length = total_processes;
+    SIM_STATE->steps[i].process_length = total_processes;
   }
 
   if (SELECTED_ALGORITHM == SC_FirstInFirstOut) {
-    simulate_first_in_first_out(&PROCESS_LIST, sim);
+    simulate_first_in_first_out(&PROCESS_LIST, SIM_STATE);
   }
+  // TODO: Add another algorithms...
 }
 
 static void handle_open_file_click(GtkWidget *widget, gpointer data) {

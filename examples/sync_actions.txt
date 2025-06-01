@@ -1,0 +1,3 @@
+P1, WRITE, M1, 2
+P2, READ, M1, 2
+P3, READ, M2, 2

@@ -114,6 +114,10 @@ static SC_StringList PID_LIST;
 static SC_Simulation *SIM_STATE;
 static struct SC_Arena SIM_BTN_LABELS_ARENA;
 
+static SC_StringList SYNC_PROCESS_NAMES;
+static SC_StringList SYNC_RESOURCES_NAMES;
+static SC_StringList SYNC_ACTIONS_NAMES;
+
 // ################################
 // ||                            ||
 // ||         UTILITIES          ||
@@ -552,13 +556,123 @@ static GtkWidget *CalendarView(GtkWindow *window) {
  * @return GtkWidget* The container of this view.
  */
 static GtkWidget *SyncView(GtkWindow *window) {
-  GtkWidget *button = gtk_button_new_with_label("Goodye world!");
+  // === SIDEBAR LAYOUT ===
+  GtkWidget *sidebar = gtk_box_new(GTK_ORIENTATION_VERTICAL, 5);
+  gtk_widget_set_hexpand(sidebar, FALSE);
+  gtk_widget_set_vexpand(sidebar, TRUE);
 
-  g_signal_connect(button, "clicked", G_CALLBACK(print_hello), NULL);
-  g_signal_connect_swapped(button, "clicked", G_CALLBACK(gtk_window_destroy),
-                           window);
+  // === LOAD PROCESSES ===
+  GtkTextBuffer *process_buffer = gtk_text_buffer_new(NULL);
+  gtk_text_buffer_set_text(process_buffer, "NO FILE LOADED!", -1);
 
-  return button;
+  SC_OpenFileEVData *evData = malloc(sizeof(SC_OpenFileEVData));
+  if (NULL == evData) {
+    SC_PANIC("Failed to malloc enough space for the file loader event!\n");
+    return NULL;
+  }
+
+  evData->window = window;
+  evData->buffer = GTK_TEXT_BUFFER(process_buffer);
+  evData->button_container = GTK_BOX(sidebar);
+  GtkWidget *load_process_btn =
+      MainButton("Load processes", handle_open_file_click, evData);
+  gtk_box_append(GTK_BOX(sidebar), load_process_btn);
+
+  GtkWidget *process_text_view = gtk_text_view_new_with_buffer(process_buffer);
+  gtk_text_view_set_editable(GTK_TEXT_VIEW(process_text_view), FALSE);
+
+  // Wrap in scrolled window
+  GtkWidget *process_scroll = gtk_scrolled_window_new();
+  gtk_widget_set_vexpand(process_scroll, TRUE);
+  gtk_widget_set_hexpand(process_scroll, TRUE);
+  gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(process_scroll),
+                                process_text_view);
+  gtk_box_append(GTK_BOX(sidebar), process_scroll);
+
+  // === LOAD RESOURCES ===
+  GtkTextBuffer *resources_buffer = gtk_text_buffer_new(NULL);
+  gtk_text_buffer_set_text(resources_buffer, "NO FILE LOADED!", -1);
+
+  SC_OpenFileEVData *resources_ev_data = malloc(sizeof(SC_OpenFileEVData));
+  if (!resources_ev_data) {
+    SC_PANIC("malloc failed");
+    return NULL;
+  }
+  resources_ev_data->window = window;
+  resources_ev_data->buffer = resources_buffer;
+  resources_ev_data->button_container = GTK_BOX(sidebar);
+
+  GtkWidget *load_resources_btn =
+      MainButton("Load resources", handle_open_file_click, resources_ev_data);
+  gtk_box_append(GTK_BOX(sidebar), load_resources_btn);
+
+  GtkWidget *resources_text_view =
+      gtk_text_view_new_with_buffer(resources_buffer);
+  gtk_text_view_set_editable(GTK_TEXT_VIEW(resources_text_view), FALSE);
+
+  GtkWidget *resources_scroll = gtk_scrolled_window_new();
+  gtk_widget_set_vexpand(resources_scroll, TRUE);
+  gtk_widget_set_hexpand(resources_scroll, TRUE);
+  gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(resources_scroll),
+                                resources_text_view);
+  gtk_box_append(GTK_BOX(sidebar), resources_scroll);
+
+  // === LOAD ACTIONS ===
+
+  GtkTextBuffer *actions_buffer = gtk_text_buffer_new(NULL);
+  gtk_text_buffer_set_text(actions_buffer, "NO FILE LOADED!", -1);
+
+  SC_OpenFileEVData *actions_ev_data = malloc(sizeof(SC_OpenFileEVData));
+  if (!actions_ev_data) {
+    SC_PANIC("malloc failed");
+    return NULL;
+  }
+  actions_ev_data->window = window;
+  actions_ev_data->buffer = actions_buffer;
+  actions_ev_data->button_container = GTK_BOX(sidebar);
+
+  GtkWidget *load_actions_btn =
+      MainButton("Load actions", handle_open_file_click, actions_ev_data);
+  gtk_box_append(GTK_BOX(sidebar), load_actions_btn);
+
+  GtkWidget *actions_text_view = gtk_text_view_new_with_buffer(actions_buffer);
+  gtk_text_view_set_editable(GTK_TEXT_VIEW(actions_text_view), FALSE);
+
+  GtkWidget *actions_scroll = gtk_scrolled_window_new();
+  gtk_widget_set_vexpand(actions_scroll, TRUE);
+  gtk_widget_set_hexpand(actions_scroll, TRUE);
+  gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(actions_scroll),
+                                actions_text_view);
+  gtk_box_append(GTK_BOX(sidebar), actions_scroll);
+
+  // === MAIN CONTENT ===
+  GtkWidget *main_box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 5);
+  gtk_widget_set_halign(main_box, GTK_ALIGN_CENTER);
+  gtk_widget_set_valign(main_box, GTK_ALIGN_CENTER);
+
+  GtkWidget *main_label = gtk_label_new("Main Content");
+
+  GtkWidget *exit_button = gtk_button_new_with_label("Goodbye world!");
+  g_signal_connect(exit_button, "clicked", G_CALLBACK(print_hello), NULL);
+  g_signal_connect_swapped(exit_button, "clicked",
+                           G_CALLBACK(gtk_window_destroy), window);
+
+  gtk_box_append(GTK_BOX(main_box), main_label);
+  gtk_box_append(GTK_BOX(main_box), exit_button);
+
+  // === SPLIT VIEW ===
+  GtkWidget *paned = gtk_paned_new(GTK_ORIENTATION_HORIZONTAL);
+  gtk_widget_set_hexpand(paned, TRUE);
+  gtk_widget_set_vexpand(paned, TRUE);
+
+  // Assign children to the paned container
+  gtk_paned_set_start_child(GTK_PANED(paned), sidebar);
+  gtk_paned_set_end_child(GTK_PANED(paned), main_box);
+
+  // Optional: set initial position (in pixels) for sidebar width
+  gtk_paned_set_position(GTK_PANED(paned), 400);
+
+  return paned;
 }
 
 static void activate(GtkApplication *app, gpointer user_data) {

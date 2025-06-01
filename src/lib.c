@@ -692,6 +692,7 @@ void parse_scheduling_file(SC_String *file_contents,
  * Represents the possible states of a process in the simulation.
  */
 typedef enum {
+  STATE_READY,
   /** The process is currently using a resource. */
   STATE_ACCESSED,
   /** The process is waiting for a resource to become available. */
@@ -738,6 +739,7 @@ typedef struct {
  * Represents an action a process wants to perform on a resource.
  */
 typedef struct {
+  int id;
   /** ID of the process performing the action. */
   int pid;
   /** ID of the resource to access. */
@@ -823,9 +825,13 @@ typedef struct {
   /** Indicates whether the simulation is still running. */
   SC_Bool simulation_running;
 
+  int semaphore_count;
+
   /** Total number of simulation cycles. */
   int total_cycles;
 } SC_SyncSimulator;
+
+void SC_SyncSimulator_init(SC_SyncSimulator *simu) {}
 
 /**
  * Takes a Simulation objects and computes its next step inplace
@@ -851,11 +857,12 @@ void SC_SyncSimulator_next(SC_SyncSimulator *s) {
   //
   //      if simulation.mode = MUTEX and consumed_resource != 1:
   //        resources_count--
-  //      if simulation.mode = MUTEX and consumed_resource != n:
+  //      if simulation.mode = SEMAPHORE and consumed_resource != n:
   //        resources_count--
   //
   //      p.status = STATE_ACCESSED
   //      a.states = finished
+  //
   // for each process:
   //    if not action executed:
   //      p.STATUS = COMPUTING

@@ -251,6 +251,19 @@ static void handle_previous_click(GtkWidget *widget, gpointer data) {
     }
   }
 }
+
+static void handle_reset_click(GtkWidget *widget, gpointer data) {
+  SC_UpdateSimCanvasData *ev_data = (SC_UpdateSimCanvasData *)data;
+  SC_Bool should_reset = SIM_STATE->current_step > 0;
+  if (should_reset) {
+    SIM_STATE->current_step = 0;
+    size_t err = NO_ERROR;
+    update_sim_canvas(ev_data->canvas_container, ev_data->step_label, &err);
+    if (err != NO_ERROR) {
+      return;
+    }
+  }
+}
 // ################################
 // ||                            ||
 // ||         UI BLOCKS          ||
@@ -421,6 +434,8 @@ static GtkWidget *CalendarView(GtkWindow *window) {
   // gtk_box_append(GTK_BOX(simControlsBox), ppButton);
   GtkWidget *nextButton = MainButton("Next", handle_next_click, evData);
   gtk_box_append(GTK_BOX(simControlsBox), nextButton);
+
+  g_signal_connect(resetBtn, "clicked", G_CALLBACK(handle_reset_click), evData);
 
   GtkWidget *loadFileBtn =
       MainButton("Load File", handle_open_file_click, evData);

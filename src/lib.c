@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+typedef unsigned int uint;
 typedef size_t *SC_Err;
 static const size_t NO_ERROR = 1;
 static const size_t NOT_FOUND = 2;
@@ -478,16 +479,21 @@ typedef struct {
   uint priority;
 } SC_Process;
 
-struct SC_ProcessList_Node {
+typedef struct SC_ProcessList_Node {
   SC_Process value;
   struct SC_ProcessList_Node *next;
-};
+} SC_ProcessList_Node;
 
 typedef struct {
   size_t count;
   struct SC_ProcessList_Node *head;
   struct SC_ProcessList_Node *tail;
 } SC_ProcessList;
+
+void SC_ProcessList_sort(SC_ProcessList *list,
+                         int (*cmp)(SC_Process, SC_Process));
+int compare_by_arrival_time(SC_Process a, SC_Process b);
+int SC_Total_busrt_time(SC_ProcessList *list);
 
 void SC_ProcessList_Init(SC_ProcessList *list) {
   list->count = 0;
@@ -576,23 +582,56 @@ typedef struct {
 void simulate_first_in_first_out(SC_ProcessList *processes,
                                  SC_Simulation *sim) {
   // TODO: Fill with real data and not this dummy data...
+  SC_ProcessList_sort(processes, compare_by_arrival_time);
 
-  for (int step_i = 0; step_i < 2; step_i++) {
-    sim->steps[step_i].process_length = processes->count;
+  int totalBurstTime = SC_Total_busrt_time(processes);
 
-    int j = 0;
-    for (struct SC_ProcessList_Node *current = processes->head; current != NULL;
-         current = current->next) {
-      sim->steps[step_i].processes[j] = current->value;
-      j++;
+  sim->step_length = totalBurstTime;
+  sim->current_step = 0;
+  sim->steps = malloc(sizeof(SC_SimStepState) * totalBurstTime);
+
+  SC_ProcessList_Node *current = processes->head;
+  int time = 0;
+  while (current != NULL) {
+    SC_Process proc = current->value;
+
+    for (int i = 0; i < (int)proc.burst_time; i++) {
+      SC_SimStepState *step = &sim->steps[time];
+      step->current_process = proc.pid_idx;
+
+      step->process_length = processes->count;
+      step->processes = malloc(sizeof(SC_Process) * processes->count);
+
+      SC_ProcessList_Node *copy_node = processes->head;
+      int j = 0;
+      while (copy_node != NULL) {
+        step->processes[j++] = copy_node->value;
+        copy_node = copy_node->next;
+      }
+
+      time++;
     }
 
-    size_t current_process = 0;
-    if (step_i == 1) {
-      current_process = 2;
-    }
-    sim->steps[step_i].current_process = current_process;
+    current = current->next;
   }
+
+  // for (int step_i = 0; step_i < 2; step_i++) {
+  //   sim->steps[step_i].process_length = processes->count;
+
+  //   int j = 0;
+  //   for (struct SC_ProcessList_Node *current = processes->head; current !=
+  //   NULL;
+  //        current = current->next) {
+  //     sim->steps[step_i].processes[j] = current->value;
+  //     j++;
+  //   }
+
+  //   size_t current_process = 0;
+  //   if (step_i == 1) {
+  //     current_process = 2;
+  //   }
+  //   sim->steps[step_i].current_process = current_process;
+  // }
 }
 
 void parse_scheduling_file(SC_String *file_contents,
@@ -876,3 +915,98 @@ void parse_syncProcess_file(SC_String *file_contents,
                             struct SC_Arena *processes_arena,
                             SC_StringList *pid_list, SC_ProcessList *processes,
                             SC_Err err) {}
+
+// ##################################
+// #                                #
+// #         MISCELLANEOUS          #
+// #                                #
+// ##################################
+
+// Comparison functions
+int compare_by_arrival_time(SC_Process a, SC_Process b) {
+  return (int)a.arrival_time - (int)b.arrival_time;
+}
+
+int compare_by_burst_time(SC_Process a, SC_Process b) {
+  return (int)a.burst_time - (int)b.burst_time;
+}
+
+int compare_by_priority(SC_Process a, SC_Process b) {
+  return (int)a.priority - (int)b.priority;
+}
+
+// Merge sort implementation
+SC_ProcessList_Node *mergedSorted(SC_ProcessList_Node *a,
+                                  SC_ProcessList_Node *b,
+                                  int (*cmp)(SC_Process, SC_Process)) {
+  if (!a)
+    return b;
+  if (!b)
+    return a;
+
+  if (cmp(a->value, b->value) <= 0) {
+    a->next = mergedSorted(a->next, b, cmp);
+    return a;
+  } else {
+    b->next = mergedSorted(a, b->next, cmp);
+    return b;
+  }
+}
+
+void splitList(SC_ProcessList_Node *source, SC_ProcessList_Node **front,
+               SC_ProcessList_Node **back) {
+  SC_ProcessList_Node *slow = source;
+  SC_ProcessList_Node *fast = source->next;
+
+  while (fast) {
+    fast = fast->next;
+    if (fast) {
+      slow = slow->next;
+      fast = fast->next;
+    }
+  }
+
+  *front = source;
+  *back = slow->next;
+  slow->next = NULL;
+}
+
+void mergeSort(SC_ProcessList_Node **headRef,
+               int (*cmp)(SC_Process, SC_Process)) {
+  SC_ProcessList_Node *head = *headRef;
+  if (!head || !head->next)
+    return;
+
+  SC_ProcessList_Node *a, *b;
+  splitList(head, &a, &b);
+
+  mergeSort(&a, cmp);
+  mergeSort(&b, cmp);
+
+  *headRef = mergedSorted(a, b, cmp);
+}
+
+void SC_ProcessList_sort(SC_ProcessList *list,
+                         int (*cmp)(SC_Process, SC_Process)) {
+  mergeSort(&(list->head), cmp);
+
+  SC_ProcessList_Node *curr = list->head;
+  while (curr && curr->next) {
+    curr = curr->next;
+  }
+  list->tail = curr;
+}
+
+// Total burst time
+// Calculates the total bust time of the scheduler process
+int SC_Total_busrt_time(SC_ProcessList *list) {
+  int totalTime = 0;
+  SC_ProcessList_Node *current = list->head;
+  while (current != NULL) {
+    SC_Process proc = current->value;
+    totalTime += proc.burst_time;
+    current = current->next;
+  }
+
+  return totalTime;
+}

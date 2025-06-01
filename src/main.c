@@ -37,6 +37,13 @@ typedef struct {
   SC_UpdateSimCanvasData update_sim_canvas;
 } SC_GlobalEventData;
 
+// FIXME: Append to SC_GlobalEventData!
+typedef struct {
+  GtkWindow *window;
+  GtkTextBuffer *buffer;
+  GtkBox *button_container;
+} SC_OpenFileEVData;
+
 typedef int SC_Algorithm;
 static SC_Algorithm SC_FirstInFirstOut = 1;
 static SC_Algorithm SC_ShortestFirst = 2;

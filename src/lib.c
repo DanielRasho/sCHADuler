@@ -641,6 +641,12 @@ void parse_scheduling_file(SC_String *file_contents,
 
     case ',': {
       if (1 == current_column) {
+        // Add null terminator to PIDs
+        SC_String_AppendChar(&buffer, 0, err);
+        if (*err != NO_ERROR) {
+          return;
+        }
+
         SC_StringList_Append(pid_list, pids_arena, buffer, err);
         if (*err != NO_ERROR) {
           return;

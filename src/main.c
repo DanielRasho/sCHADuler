@@ -1,8 +1,5 @@
-#include "gio/gio.h"
-#include "glib-object.h"
 #include "lib.c"
 #include "resources.c"
-#include <gdk/gdk.h>
 #include <gtk/gtk.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -25,11 +22,20 @@ const static size_t INITIAL_PROCESSES = 15;
 // ################################
 
 typedef struct {
-  GtkWindow *window;
-  GtkTextBuffer *buffer;
   GtkBox *canvas_container;
   GtkLabel *step_label;
+  GListStore *info_store;
 } SC_UpdateSimCanvasData;
+
+typedef struct {
+  GtkSpinButton *spin_button;
+  GtkWindow *window;
+} SC_LoadedNewFileData;
+
+typedef struct {
+  SC_LoadedNewFileData new_file_loaded;
+  SC_UpdateSimCanvasData update_sim_canvas;
+} SC_GlobalEventData;
 
 typedef int SC_Algorithm;
 static SC_Algorithm SC_FirstInFirstOut = 1;
@@ -37,6 +43,55 @@ static SC_Algorithm SC_ShortestFirst = 2;
 static SC_Algorithm SC_ShortestRemaining = 3;
 static SC_Algorithm SC_RoundRobin = 4;
 static SC_Algorithm SC_Priority = 5;
+
+// ################################
+// ||                            ||
+// ||      CUSTOM GOBJECTS       ||
+// ||                            ||
+// ################################
+
+#define CAPITAL_TYPE_ITEM (sc_process_gio_get_type())
+G_DECLARE_FINAL_TYPE(SCProcessGio, sc_process_gio, SC, PROCESS_GIO, GObject)
+
+struct _SCProcessGio {
+  GObject parent_instance;
+  size_t pid_idx;
+  uint burst_time;
+  uint arrival_time;
+  uint priority;
+};
+static void sc_process_gio_init(SCProcessGio *item) {}
+
+struct _SCProcessGioClass {
+  GObjectClass parent_class;
+};
+static void sc_process_gio_class_init(SCProcessGioClass *class) {}
+
+G_DEFINE_TYPE(SCProcessGio, sc_process_gio, G_TYPE_OBJECT)
+
+static SCProcessGio *sc_process_gio_new(size_t pid_idx, uint burst_time,
+                                        uint arrival_time, uint priority) {
+  SCProcessGio *item = g_object_new(sc_process_gio_get_type(), NULL);
+  item->pid_idx = pid_idx;
+  item->burst_time = burst_time;
+  item->arrival_time = arrival_time;
+  item->priority = priority;
+
+  return item;
+}
+
+static size_t sc_process_gio_get_pid_idx(SCProcessGio *self) {
+  return self->pid_idx;
+}
+static uint sc_process_gio_get_burst_time(SCProcessGio *self) {
+  return self->burst_time;
+}
+static uint sc_process_gio_get_arrival_time(SCProcessGio *self) {
+  return self->arrival_time;
+}
+static uint sc_process_gio_get_priority(SCProcessGio *self) {
+  return self->priority;
+}
 
 // ################################
 // ||                            ||
@@ -66,17 +121,17 @@ static struct SC_Arena SIM_BTN_LABELS_ARENA;
 // ################################
 
 // Updated the simulation display
-static void update_sim_canvas(GtkBox *container, GtkLabel *step_label,
-                              SC_Err err) {
+static void update_sim_canvas(SC_UpdateSimCanvasData params, SC_Err err) {
   GtkWidget *widget;
-  while ((widget = gtk_widget_get_first_child(GTK_WIDGET(container))) != NULL) {
-    gtk_box_remove(container, widget);
+  while ((widget = gtk_widget_get_first_child(
+              GTK_WIDGET(params.canvas_container))) != NULL) {
+    gtk_box_remove(params.canvas_container, widget);
   }
 
   char str[] = {'C', 'u', 'r', 'r', 'e', 'n', 't', ' ', 'S',
                 't', 'e', 'p', ':', ' ', 0,   0,   0};
   sprintf(str + strlen(str), "%zu", SIM_STATE->current_step);
-  gtk_label_set_label(step_label, str);
+  gtk_label_set_label(params.step_label, str);
 
   SC_Arena_Reset(&SIM_BTN_LABELS_ARENA);
   for (int i = 0; i <= SIM_STATE->current_step; i++) {
@@ -90,18 +145,51 @@ static void update_sim_canvas(GtkBox *container, GtkLabel *step_label,
               i, current_process, pid_idx);
       return;
     }
-    const char *pid_c_str =
-        SC_String_ToCString(&pid_str, &SIM_BTN_LABELS_ARENA, err);
-    if (*err != NO_ERROR) {
-      fprintf(stderr,
-              "SIM_STEP_ERROR (%d): Failed to get pid for process (idx: %zu): "
-              "Failed to transform SC_String (`%*s`) into c_str\n",
-              i, current_process, (int)pid_str.length, pid_str.data);
-      return;
+
+    GtkWidget *button = gtk_button_new_with_label(pid_str.data);
+    gtk_box_append(params.canvas_container, button);
+
+    SC_Bool is_last_iteration = i == SIM_STATE->current_step;
+    if (is_last_iteration) {
+      g_list_store_remove_all(params.info_store);
+      for (int j = 0; j < SIM_STATE->steps[i].process_length; j++) {
+        SC_Process current = SIM_STATE->steps[i].processes[j];
+        g_list_store_append(
+            params.info_store,
+            sc_process_gio_new(current.pid_idx, current.burst_time,
+                               current.arrival_time, current.priority));
+      }
     }
-    GtkWidget *button = gtk_button_new_with_label(pid_c_str);
-    gtk_box_append(container, button);
   }
+}
+
+// ################################
+// ||                            ||
+// ||      COLUMN BUILDERS       ||
+// ||                            ||
+// ################################
+
+static void setup_label_cb(GtkSignalListItemFactory *factory,
+                           GObject *listitem) {
+  GtkWidget *label = gtk_label_new(NULL);
+  gtk_list_item_set_child(GTK_LIST_ITEM(listitem), label);
+}
+
+static void bind_pid_cb(GtkSignalListItemFactory *factory,
+                        GtkListItem *listitem) {
+  GtkWidget *label = gtk_list_item_get_child(listitem);
+  GObject *item = gtk_list_item_get_item(GTK_LIST_ITEM(listitem));
+  size_t pid_idx = sc_process_gio_get_pid_idx(SC_PROCESS_GIO(item));
+
+  size_t err = NO_ERROR;
+  SC_String str = SC_StringList_GetAt(&PID_LIST, pid_idx, &err);
+  if (err != NO_ERROR) {
+    fprintf(stderr, "ERROR: Failed to bind pid for tableview, pid_idx: %zu\n",
+            pid_idx);
+    return;
+  }
+
+  gtk_label_set_text(GTK_LABEL(label), str.data);
 }
 
 // ################################
@@ -122,6 +210,9 @@ static void change_selected_algorithm(GtkCheckButton *self, gpointer *data) {
 
 static void file_dialog_finished(GObject *source_object, GAsyncResult *res,
                                  gpointer data) {
+  SC_GlobalEventData *global_ev_data = (SC_GlobalEventData *)data;
+  SC_LoadedNewFileData ev_data = global_ev_data->new_file_loaded;
+
   GError **error = NULL;
   GFile *file =
       gtk_file_dialog_open_finish(GTK_FILE_DIALOG(source_object), res, error);
@@ -152,9 +243,6 @@ static void file_dialog_finished(GObject *source_object, GAsyncResult *res,
   };
   fprintf(stderr, "The file contents are:\n%*s\n", (int)file_contents.length,
           file_contents.data);
-
-  SC_UpdateSimCanvasData *ev_data = (SC_UpdateSimCanvasData *)data;
-  gtk_text_buffer_set_text(ev_data->buffer, contents, length);
 
   SC_Arena_Reset(&PIDS_ARENA);
   SC_Arena_Reset(&PROCESS_LIST_ARENA);
@@ -203,6 +291,8 @@ static void file_dialog_finished(GObject *source_object, GAsyncResult *res,
   }
   SIM_STATE->step_length = total_steps;
 
+  // TODO: Use the quantum variable depending on the algorithm...
+  int quantum = gtk_spin_button_get_value_as_int(ev_data.spin_button);
   if (SELECTED_ALGORITHM == SC_FirstInFirstOut) {
     simulate_first_in_first_out(&PROCESS_LIST, SIM_STATE);
   }
@@ -211,28 +301,28 @@ static void file_dialog_finished(GObject *source_object, GAsyncResult *res,
   // FIXME: The current step should be 0
   SIM_STATE->current_step = 0;
 
-  update_sim_canvas(ev_data->canvas_container, ev_data->step_label, &err);
+  update_sim_canvas(global_ev_data->update_sim_canvas, &err);
   if (err != NO_ERROR) {
     return;
   }
 }
 
 static void handle_open_file_click(GtkWidget *widget, gpointer data) {
-  SC_UpdateSimCanvasData *ev_data = (SC_UpdateSimCanvasData *)data;
+  SC_GlobalEventData *ev_data = (SC_GlobalEventData *)data;
   GtkFileDialog *dialog = gtk_file_dialog_new();
   gtk_file_dialog_set_title(dialog, "Archivo de simulacion");
   gtk_file_dialog_set_modal(dialog, TRUE);
-  gtk_file_dialog_open(dialog, ev_data->window, NULL, file_dialog_finished,
-                       data);
+  gtk_file_dialog_open(dialog, ev_data->new_file_loaded.window, NULL,
+                       file_dialog_finished, data);
 }
 
 static void handle_next_click(GtkWidget *widget, gpointer data) {
-  SC_UpdateSimCanvasData *ev_data = (SC_UpdateSimCanvasData *)data;
+  SC_GlobalEventData *ev_data = (SC_GlobalEventData *)data;
   SC_Bool has_next_step = SIM_STATE->current_step + 1 < SIM_STATE->step_length;
   if (has_next_step) {
     SIM_STATE->current_step += 1;
     size_t err = NO_ERROR;
-    update_sim_canvas(ev_data->canvas_container, ev_data->step_label, &err);
+    update_sim_canvas(ev_data->update_sim_canvas, &err);
     if (err != NO_ERROR) {
       return;
     }
@@ -240,12 +330,12 @@ static void handle_next_click(GtkWidget *widget, gpointer data) {
 }
 
 static void handle_previous_click(GtkWidget *widget, gpointer data) {
-  SC_UpdateSimCanvasData *ev_data = (SC_UpdateSimCanvasData *)data;
+  SC_GlobalEventData *ev_data = (SC_GlobalEventData *)data;
   SC_Bool has_previous_step = SIM_STATE->current_step > 0;
   if (has_previous_step) {
     SIM_STATE->current_step -= 1;
     size_t err = NO_ERROR;
-    update_sim_canvas(ev_data->canvas_container, ev_data->step_label, &err);
+    update_sim_canvas(ev_data->update_sim_canvas, &err);
     if (err != NO_ERROR) {
       return;
     }
@@ -253,12 +343,12 @@ static void handle_previous_click(GtkWidget *widget, gpointer data) {
 }
 
 static void handle_reset_click(GtkWidget *widget, gpointer data) {
-  SC_UpdateSimCanvasData *ev_data = (SC_UpdateSimCanvasData *)data;
+  SC_GlobalEventData *ev_data = (SC_GlobalEventData *)data;
   SC_Bool should_reset = SIM_STATE->current_step > 0;
   if (should_reset) {
     SIM_STATE->current_step = 0;
     size_t err = NO_ERROR;
-    update_sim_canvas(ev_data->canvas_container, ev_data->step_label, &err);
+    update_sim_canvas(ev_data->update_sim_canvas, &err);
     if (err != NO_ERROR) {
       return;
     }
@@ -349,17 +439,20 @@ static GtkWidget *CalendarView(GtkWindow *window) {
   gtk_widget_set_hexpand(simBox, TRUE);
   gtk_paned_set_end_child(GTK_PANED(simContainer), processInfoBox);
 
-  const char *exampleFileContents = "NO FILE LOADED!";
-  GtkTextBuffer *fileContentBuffer = gtk_text_buffer_new(NULL);
-  gtk_text_buffer_set_text(fileContentBuffer, exampleFileContents,
-                           strlen(exampleFileContents));
+  GListStore *processModel = g_list_store_new(G_TYPE_OBJECT);
+  g_list_store_append(processModel, sc_process_gio_new(0, 0, 0, 0));
+  fprintf(stderr, "INFO: Creating selection model...\n");
+  GtkNoSelection *selectionModel =
+      gtk_no_selection_new(G_LIST_MODEL(processModel));
+  GtkWidget *tableView =
+      gtk_column_view_new(GTK_SELECTION_MODEL(selectionModel));
+  gtk_box_append(GTK_BOX(processInfoBox), tableView);
+  gtk_column_view_set_show_column_separators(GTK_COLUMN_VIEW(tableView), TRUE);
 
-  GtkWidget *fileContentsTextView =
-      gtk_text_view_new_with_buffer(fileContentBuffer);
-  gtk_text_view_set_editable(GTK_TEXT_VIEW(fileContentsTextView), FALSE);
-  gtk_box_append(GTK_BOX(processInfoBox), fileContentsTextView);
-  gtk_widget_set_vexpand(fileContentsTextView, TRUE);
-  gtk_widget_set_hexpand(fileContentsTextView, TRUE);
+  // PID cell factory
+  GtkListItemFactory *factory = gtk_signal_list_item_factory_new();
+  g_signal_connect(factory, "setup", G_CALLBACK(setup_label_cb), NULL);
+  g_signal_connect(factory, "bind", G_CALLBACK(bind_pid_cb), NULL);
 
   // Algorithm selection and load new file half
   GtkWidget *controlsContainer = gtk_box_new(GTK_ORIENTATION_VERTICAL, 5);
@@ -417,16 +510,20 @@ static GtkWidget *CalendarView(GtkWindow *window) {
   gtk_widget_set_vexpand(algorithmSelectionContainer, TRUE);
   gtk_box_append(GTK_BOX(controlsContainer), loadFileContainer);
 
-  SC_UpdateSimCanvasData *evData = malloc(sizeof(SC_UpdateSimCanvasData));
+  GtkWidget *quantumEntry = gtk_spin_button_new_with_range(0, 1000, 1);
+  gtk_widget_set_valign(quantumEntry, GTK_ALIGN_CENTER);
+
+  SC_GlobalEventData *evData = malloc(sizeof(SC_GlobalEventData));
   if (NULL == evData) {
     SC_PANIC("Failed to malloc enough space for the file loader event!\n");
     return NULL;
   }
 
-  evData->window = window;
-  evData->buffer = GTK_TEXT_BUFFER(fileContentBuffer);
-  evData->canvas_container = GTK_BOX(processBox);
-  evData->step_label = GTK_LABEL(tickLabel);
+  evData->new_file_loaded.window = window;
+  evData->new_file_loaded.spin_button = GTK_SPIN_BUTTON(quantumEntry);
+  evData->update_sim_canvas.canvas_container = GTK_BOX(processBox);
+  evData->update_sim_canvas.step_label = GTK_LABEL(tickLabel);
+  evData->update_sim_canvas.info_store = processModel;
 
   GtkWidget *backButton = MainButton("Back", handle_previous_click, evData);
   gtk_box_append(GTK_BOX(simControlsBox), backButton);
@@ -442,8 +539,6 @@ static GtkWidget *CalendarView(GtkWindow *window) {
   gtk_widget_set_valign(loadFileBtn, GTK_ALIGN_CENTER);
   gtk_box_append(GTK_BOX(loadFileContainer), loadFileBtn);
 
-  GtkWidget *quantumEntry = gtk_spin_button_new_with_range(0, 1000, 1);
-  gtk_widget_set_valign(quantumEntry, GTK_ALIGN_CENTER);
   gtk_box_append(GTK_BOX(loadFileContainer), quantumEntry);
 
   return container;

@@ -552,7 +552,7 @@ SC_Process SC_ProcessList_GetAt(SC_ProcessList *list, size_t idx, SC_Err err) {
 typedef struct {
   size_t current_process;
   size_t process_length;
-  SC_Process processes[];
+  SC_Process *processes;
 } SC_SimStepState;
 
 /**
@@ -561,7 +561,7 @@ typedef struct {
 typedef struct {
   size_t step_length;
   size_t current_step;
-  SC_SimStepState steps[];
+  SC_SimStepState *steps;
 } SC_Simulation;
 
 /**

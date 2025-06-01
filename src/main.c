@@ -133,21 +133,35 @@ static void file_dialog_finished(GObject *source_object, GAsyncResult *res,
   }
 
   SC_Arena_Reset(&SIM_ARENA);
-  SIM_STATE = SC_Arena_Alloc(
-      &SIM_ARENA,
-      sizeof(SC_Simulation) +
-          (sizeof(SC_SimStepState) + sizeof(SC_Process) * total_processes) *
-              total_steps,
-      &err);
+  SIM_STATE = SC_Arena_Alloc(&SIM_ARENA, sizeof(SC_Simulation), &err);
+  // SIM_STATE = SC_Arena_Alloc(
+  //     &SIM_ARENA,
+  //     sizeof(SC_Simulation) +
+  //         (sizeof(SC_SimStepState) + sizeof(SC_Process) * total_processes) *
+  //             total_steps,
+  //     &err);
   if (err != NO_ERROR) {
     fprintf(stderr, "ERROR: %s\n", SC_Err_ToString(&err));
     exit(1);
   }
 
-  SIM_STATE->step_length = total_steps;
+  SIM_STATE->steps =
+      SC_Arena_Alloc(&SIM_ARENA, sizeof(SC_SimStepState) * total_steps, &err);
+  if (err != NO_ERROR) {
+    fprintf(stderr, "ERROR: %s\n", SC_Err_ToString(&err));
+    exit(1);
+  }
+
   for (size_t i = 0; i < total_steps; i++) {
+    SIM_STATE->steps[i].processes =
+        SC_Arena_Alloc(&SIM_ARENA, sizeof(SC_Process) * total_processes, &err);
+    if (err != NO_ERROR) {
+      fprintf(stderr, "ERROR: %s\n", SC_Err_ToString(&err));
+      exit(1);
+    }
     SIM_STATE->steps[i].process_length = total_processes;
   }
+  SIM_STATE->step_length = total_steps;
 
   if (SELECTED_ALGORITHM == SC_FirstInFirstOut) {
     simulate_first_in_first_out(&PROCESS_LIST, SIM_STATE);

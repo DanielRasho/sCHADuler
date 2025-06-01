@@ -27,7 +27,8 @@ const static size_t INITIAL_PROCESSES = 15;
 typedef struct {
   GtkWindow *window;
   GtkTextBuffer *buffer;
-  GtkBox *button_container;
+  GtkBox *canvas_container;
+  GtkLabel *step_label;
 } SC_OpenFileEVData;
 
 typedef int SC_Algorithm;
@@ -57,6 +58,51 @@ static SC_StringList PID_LIST;
 
 static SC_Simulation *SIM_STATE;
 static struct SC_Arena SIM_BTN_LABELS_ARENA;
+
+// ################################
+// ||                            ||
+// ||         UTILITIES          ||
+// ||                            ||
+// ################################
+
+// Updated the simulation display
+static void update_sim_canvas(GtkBox *container, GtkLabel *step_label,
+                              SC_Err err) {
+  GtkWidget *widget;
+  while ((widget = gtk_widget_get_first_child(GTK_WIDGET(container))) != NULL) {
+    gtk_box_remove(container, widget);
+  }
+
+  char str[] = {'C', 'u', 'r', 'r', 'e', 'n', 't', ' ', 'S',
+                't', 'e', 'p', ':', ' ', 0,   0,   0};
+  sprintf(str + strlen(str), "%zu", SIM_STATE->current_step);
+  gtk_label_set_label(step_label, str);
+
+  SC_Arena_Reset(&SIM_BTN_LABELS_ARENA);
+  for (int i = 0; i <= SIM_STATE->current_step; i++) {
+    size_t current_process = SIM_STATE->steps[i].current_process;
+    size_t pid_idx = SIM_STATE->steps[i].processes[current_process].pid_idx;
+    SC_String pid_str = SC_StringList_GetAt(&PID_LIST, pid_idx, err);
+    if (*err != NO_ERROR) {
+      fprintf(stderr,
+              "SIM_STEP_ERROR (%d): Failed to get pid for process (idx: %zu): "
+              "Failed to get PID from stringlist with idx: %zu\n",
+              i, current_process, pid_idx);
+      return;
+    }
+    const char *pid_c_str =
+        SC_String_ToCString(&pid_str, &SIM_BTN_LABELS_ARENA, err);
+    if (*err != NO_ERROR) {
+      fprintf(stderr,
+              "SIM_STEP_ERROR (%d): Failed to get pid for process (idx: %zu): "
+              "Failed to transform SC_String (`%*s`) into c_str\n",
+              i, current_process, (int)pid_str.length, pid_str.data);
+      return;
+    }
+    GtkWidget *button = gtk_button_new_with_label(pid_c_str);
+    gtk_box_append(container, button);
+  }
+}
 
 // ################################
 // ||                            ||
@@ -168,37 +214,12 @@ static void file_dialog_finished(GObject *source_object, GAsyncResult *res,
   }
   // TODO: Add another algorithms...
 
-  GtkWidget *widget;
-  while ((widget = gtk_widget_get_first_child(
-              GTK_WIDGET(ev_data->button_container))) != NULL) {
-    gtk_box_remove(ev_data->button_container, widget);
-  }
-
   // FIXME: The current step should be 0
-  SIM_STATE->current_step = 1;
-  SC_Arena_Reset(&SIM_BTN_LABELS_ARENA);
-  for (int i = 0; i <= SIM_STATE->current_step; i++) {
-    size_t current_process = SIM_STATE->steps[i].current_process;
-    size_t pid_idx = SIM_STATE->steps[i].processes[current_process].pid_idx;
-    SC_String pid_str = SC_StringList_GetAt(&PID_LIST, pid_idx, &err);
-    if (err != NO_ERROR) {
-      fprintf(stderr,
-              "SIM_STEP_ERROR (%d): Failed to get pid for process (idx: %zu): "
-              "Failed to get PID from stringlist with idx: %zu\n",
-              i, current_process, pid_idx);
-      return;
-    }
-    const char *pid_c_str =
-        SC_String_ToCString(&pid_str, &SIM_BTN_LABELS_ARENA, &err);
-    if (err != NO_ERROR) {
-      fprintf(stderr,
-              "SIM_STEP_ERROR (%d): Failed to get pid for process (idx: %zu): "
-              "Failed to transform SC_String (`%*s`) into c_str\n",
-              i, current_process, (int)pid_str.length, pid_str.data);
-      return;
-    }
-    GtkWidget *button = gtk_button_new_with_label(pid_c_str);
-    gtk_box_append(ev_data->button_container, button);
+  SIM_STATE->current_step = 0;
+
+  update_sim_canvas(ev_data->canvas_container, ev_data->step_label, &err);
+  if (err != NO_ERROR) {
+    return;
   }
 }
 
@@ -379,7 +400,8 @@ static GtkWidget *CalendarView(GtkWindow *window) {
 
   evData->window = window;
   evData->buffer = GTK_TEXT_BUFFER(fileContentBuffer);
-  evData->button_container = GTK_BOX(processBox);
+  evData->canvas_container = GTK_BOX(processBox);
+  evData->step_label = GTK_LABEL(tickLabel);
 
   GtkWidget *loadFileBtn =
       MainButton("Load File", handle_open_file_click, evData);

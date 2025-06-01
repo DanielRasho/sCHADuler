@@ -154,15 +154,10 @@ static void file_dialog_finished(GObject *source_object, GAsyncResult *res,
   }
   // TODO: Add another algorithms...
 
-  GtkWidget *widget =
-      gtk_widget_get_first_child(GTK_WIDGET(ev_data->button_container));
-  GtkWidget *next;
-  if (widget != NULL) {
+  GtkWidget *widget;
+  while ((widget = gtk_widget_get_first_child(
+              GTK_WIDGET(ev_data->button_container))) != NULL) {
     gtk_box_remove(ev_data->button_container, widget);
-    while ((next = gtk_widget_get_next_sibling(widget)) != NULL) {
-      widget = next;
-      gtk_box_remove(ev_data->button_container, widget);
-    }
   }
 
   SC_Arena_Reset(&SIM_BTN_LABELS_ARENA);
@@ -174,13 +169,6 @@ static void file_dialog_finished(GObject *source_object, GAsyncResult *res,
       fprintf(stderr,
               "SIM_STEP_ERROR (%d): Failed to get pid for process (idx: %zu): "
               "Failed to get PID from stringlist with idx: %zu",
-              i, current_process, pid_idx);
-      return;
-    }
-    if (err != NO_ERROR) {
-      fprintf(stderr,
-              "SIM_STEP_ERROR (%d): Failed to get pid for process (idx: %zu): "
-              "Failed to allocate enough space for arena for pid idx: %zu",
               i, current_process, pid_idx);
       return;
     }

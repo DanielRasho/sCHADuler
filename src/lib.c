@@ -577,13 +577,21 @@ void simulate_first_in_first_out(SC_ProcessList *processes,
                                  SC_Simulation *sim) {
   // TODO: Fill with real data and not this dummy data...
 
-  int i = 0;
-  for (struct SC_ProcessList_Node *current = processes->head; current != NULL;
-       current = current->next) {
-    sim->steps[0].processes[i] = current->value;
-    sim->steps[0].current_process = 0;
-    sim->steps[0].process_length = 1;
-    i++;
+  for (int step_i = 0; step_i < 2; step_i++) {
+    sim->steps[step_i].process_length = processes->count;
+
+    int j = 0;
+    for (struct SC_ProcessList_Node *current = processes->head; current != NULL;
+         current = current->next) {
+      sim->steps[step_i].processes[j] = current->value;
+      j++;
+    }
+
+    size_t current_process = 0;
+    if (step_i == 1) {
+      current_process = 2;
+    }
+    sim->steps[step_i].current_process = current_process;
   }
 }
 

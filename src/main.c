@@ -119,9 +119,9 @@ static void file_dialog_finished(GObject *source_object, GAsyncResult *res,
   parse_scheduling_file(&file_contents, &PIDS_ARENA, &PROCESS_LIST_ARENA,
                         &PID_LIST, &PROCESS_LIST, &err);
   if (err != NO_ERROR) {
-    fprintf(stderr, "ERROR: %s", SC_Err_ToString(&err));
+    fprintf(stderr, "ERROR: %s\n", SC_Err_ToString(&err));
   } else {
-    fprintf(stderr, "Correctly parsed the file!");
+    fprintf(stderr, "Correctly parsed the file!\n");
   }
 
   size_t total_processes = PROCESS_LIST.count;
@@ -140,7 +140,7 @@ static void file_dialog_finished(GObject *source_object, GAsyncResult *res,
               total_steps,
       &err);
   if (err != NO_ERROR) {
-    fprintf(stderr, "ERROR: %s", SC_Err_ToString(&err));
+    fprintf(stderr, "ERROR: %s\n", SC_Err_ToString(&err));
     exit(1);
   }
 
@@ -160,6 +160,8 @@ static void file_dialog_finished(GObject *source_object, GAsyncResult *res,
     gtk_box_remove(ev_data->button_container, widget);
   }
 
+  // FIXME: The current step should be 0
+  SIM_STATE->current_step = 1;
   SC_Arena_Reset(&SIM_BTN_LABELS_ARENA);
   for (int i = 0; i <= SIM_STATE->current_step; i++) {
     size_t current_process = SIM_STATE->steps[i].current_process;
@@ -168,7 +170,7 @@ static void file_dialog_finished(GObject *source_object, GAsyncResult *res,
     if (err != NO_ERROR) {
       fprintf(stderr,
               "SIM_STEP_ERROR (%d): Failed to get pid for process (idx: %zu): "
-              "Failed to get PID from stringlist with idx: %zu",
+              "Failed to get PID from stringlist with idx: %zu\n",
               i, current_process, pid_idx);
       return;
     }
@@ -177,7 +179,7 @@ static void file_dialog_finished(GObject *source_object, GAsyncResult *res,
     if (err != NO_ERROR) {
       fprintf(stderr,
               "SIM_STEP_ERROR (%d): Failed to get pid for process (idx: %zu): "
-              "Failed to transform SC_String (`%*s`) into c_str",
+              "Failed to transform SC_String (`%*s`) into c_str\n",
               i, current_process, (int)pid_str.length, pid_str.data);
       return;
     }
@@ -435,7 +437,7 @@ int main(int argc, char **argv) {
   SC_Arena_Init(&PROCESS_LIST_ARENA, sizeof(SC_Process) * INITIAL_PROCESSES,
                 &err);
   if (err != NO_ERROR) {
-    fprintf(stderr, "FATAL: Failed to initialize process arena!");
+    fprintf(stderr, "FATAL: Failed to initialize process arena!\n");
     return 1;
   }
 
@@ -443,7 +445,7 @@ int main(int argc, char **argv) {
                 (sizeof(SC_String) + sizeof(char) * 10) * INITIAL_PROCESSES,
                 &err);
   if (err != NO_ERROR) {
-    fprintf(stderr, "FATAL: Failed to initialize pids arena!");
+    fprintf(stderr, "FATAL: Failed to initialize pids arena!\n");
     SC_Arena_Deinit(&PROCESS_LIST_ARENA);
     return 1;
   }
@@ -455,7 +457,7 @@ int main(int argc, char **argv) {
               INITIAL_PROCESSES * 5,
       &err);
   if (err != NO_ERROR) {
-    fprintf(stderr, "FATAL: Failed to initialize simulation arena!");
+    fprintf(stderr, "FATAL: Failed to initialize simulation arena!\n");
     SC_Arena_Deinit(&PROCESS_LIST_ARENA);
     SC_Arena_Deinit(&PIDS_ARENA);
     return 1;
@@ -464,7 +466,7 @@ int main(int argc, char **argv) {
   SC_Arena_Init(&SIM_BTN_LABELS_ARENA, sizeof(char) * 10 * INITIAL_PROCESSES,
                 &err);
   if (err != NO_ERROR) {
-    fprintf(stderr, "FATAL: Failed to initialize btn labels arena!");
+    fprintf(stderr, "FATAL: Failed to initialize btn labels arena!\n");
     SC_Arena_Deinit(&PROCESS_LIST_ARENA);
     SC_Arena_Deinit(&PIDS_ARENA);
     SC_Arena_Deinit(&SIM_ARENA);
@@ -478,7 +480,7 @@ int main(int argc, char **argv) {
 
   GdkDisplay *display = gdk_display_get_default();
   if (display == NULL) {
-    fprintf(stderr, "FATAL: No GDK display found!");
+    fprintf(stderr, "FATAL: No GDK display found!\n");
     SC_Arena_Deinit(&PROCESS_LIST_ARENA);
     SC_Arena_Deinit(&PIDS_ARENA);
     SC_Arena_Deinit(&SIM_ARENA);
@@ -497,7 +499,7 @@ int main(int argc, char **argv) {
   int status = g_application_run(G_APPLICATION(app), argc, argv);
   g_object_unref(app);
 
-  fprintf(stderr, "INFO: deiniting all arenas");
+  fprintf(stderr, "INFO: deiniting all arenas\n");
   SC_Arena_Deinit(&PROCESS_LIST_ARENA);
   SC_Arena_Deinit(&PIDS_ARENA);
   SC_Arena_Deinit(&SIM_ARENA);

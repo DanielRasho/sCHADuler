@@ -820,7 +820,35 @@ typedef struct {
  *
  * The next step should be registered on
  */
-void SC_SyncSimulator_next(SC_SyncSimulator *s) {}
+void SC_SyncSimulator_next(SC_SyncSimulator *s) {
+  // Pseudo code (just a suggestion)
+  //
+  // process_visited = []
+  //
+  // for each resources:
+  //    actions = []
+  //
+  //    for a in actions:
+  //      if a in this cycle => actions.append(a)
+  //      else => continue
+  //
+  //    while len(consumed_actions) != len(actions):
+  //      a = find_nex_action_with_highest_priority()
+  //
+  //      if simulation.mode = MUTEX and consumed_resource != 1:
+  //        resources_count--
+  //      if simulation.mode = MUTEX and consumed_resource != n:
+  //        resources_count--
+  //
+  //      p.status = STATE_ACCESSED
+  //      a.states = finished
+  // for each process:
+  //    if not action executed:
+  //      p.STATUS = COMPUTING
+  //
+  // reset_resource_counters()
+  //
+}
 
 void parse_syncProcess_file(SC_String *file_contents,
                             struct SC_Arena *pids_arena,

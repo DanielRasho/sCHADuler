@@ -29,7 +29,7 @@ typedef struct {
   GtkTextBuffer *buffer;
   GtkBox *canvas_container;
   GtkLabel *step_label;
-} SC_OpenFileEVData;
+} SC_UpdateSimCanvasData;
 
 typedef int SC_Algorithm;
 static SC_Algorithm SC_FirstInFirstOut = 1;
@@ -153,7 +153,7 @@ static void file_dialog_finished(GObject *source_object, GAsyncResult *res,
   fprintf(stderr, "The file contents are:\n%*s\n", (int)file_contents.length,
           file_contents.data);
 
-  SC_OpenFileEVData *ev_data = (SC_OpenFileEVData *)data;
+  SC_UpdateSimCanvasData *ev_data = (SC_UpdateSimCanvasData *)data;
   gtk_text_buffer_set_text(ev_data->buffer, contents, length);
 
   SC_Arena_Reset(&PIDS_ARENA);
@@ -180,12 +180,6 @@ static void file_dialog_finished(GObject *source_object, GAsyncResult *res,
 
   SC_Arena_Reset(&SIM_ARENA);
   SIM_STATE = SC_Arena_Alloc(&SIM_ARENA, sizeof(SC_Simulation), &err);
-  // SIM_STATE = SC_Arena_Alloc(
-  //     &SIM_ARENA,
-  //     sizeof(SC_Simulation) +
-  //         (sizeof(SC_SimStepState) + sizeof(SC_Process) * total_processes) *
-  //             total_steps,
-  //     &err);
   if (err != NO_ERROR) {
     fprintf(stderr, "ERROR: %s\n", SC_Err_ToString(&err));
     exit(1);
@@ -224,7 +218,7 @@ static void file_dialog_finished(GObject *source_object, GAsyncResult *res,
 }
 
 static void handle_open_file_click(GtkWidget *widget, gpointer data) {
-  SC_OpenFileEVData *ev_data = (SC_OpenFileEVData *)data;
+  SC_UpdateSimCanvasData *ev_data = (SC_UpdateSimCanvasData *)data;
   GtkFileDialog *dialog = gtk_file_dialog_new();
   gtk_file_dialog_set_title(dialog, "Archivo de simulacion");
   gtk_file_dialog_set_modal(dialog, TRUE);
@@ -232,6 +226,31 @@ static void handle_open_file_click(GtkWidget *widget, gpointer data) {
                        data);
 }
 
+static void handle_next_click(GtkWidget *widget, gpointer data) {
+  SC_UpdateSimCanvasData *ev_data = (SC_UpdateSimCanvasData *)data;
+  SC_Bool has_next_step = SIM_STATE->current_step + 1 < SIM_STATE->step_length;
+  if (has_next_step) {
+    SIM_STATE->current_step += 1;
+    size_t err = NO_ERROR;
+    update_sim_canvas(ev_data->canvas_container, ev_data->step_label, &err);
+    if (err != NO_ERROR) {
+      return;
+    }
+  }
+}
+
+static void handle_previous_click(GtkWidget *widget, gpointer data) {
+  SC_UpdateSimCanvasData *ev_data = (SC_UpdateSimCanvasData *)data;
+  SC_Bool has_previous_step = SIM_STATE->current_step > 0;
+  if (has_previous_step) {
+    SIM_STATE->current_step -= 1;
+    size_t err = NO_ERROR;
+    update_sim_canvas(ev_data->canvas_container, ev_data->step_label, &err);
+    if (err != NO_ERROR) {
+      return;
+    }
+  }
+}
 // ################################
 // ||                            ||
 // ||         UI BLOCKS          ||
@@ -311,13 +330,6 @@ static GtkWidget *CalendarView(GtkWindow *window) {
   GtkWidget *simControlsBox = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 3);
   gtk_box_append(GTK_BOX(simBox), simControlsBox);
 
-  GtkWidget *backButton = MainButton("Back", NULL, NULL);
-  gtk_box_append(GTK_BOX(simControlsBox), backButton);
-  GtkWidget *ppButton = MainButton("Pause/Play", NULL, NULL);
-  gtk_box_append(GTK_BOX(simControlsBox), ppButton);
-  GtkWidget *nextButton = MainButton("Next", NULL, NULL);
-  gtk_box_append(GTK_BOX(simControlsBox), nextButton);
-
   GtkWidget *processInfoBox = gtk_box_new(GTK_ORIENTATION_VERTICAL, 1);
   gtk_widget_set_name(processInfoBox, "processBox");
   gtk_widget_set_vexpand(simBox, TRUE);
@@ -392,7 +404,7 @@ static GtkWidget *CalendarView(GtkWindow *window) {
   gtk_widget_set_vexpand(algorithmSelectionContainer, TRUE);
   gtk_box_append(GTK_BOX(controlsContainer), loadFileContainer);
 
-  SC_OpenFileEVData *evData = malloc(sizeof(SC_OpenFileEVData));
+  SC_UpdateSimCanvasData *evData = malloc(sizeof(SC_UpdateSimCanvasData));
   if (NULL == evData) {
     SC_PANIC("Failed to malloc enough space for the file loader event!\n");
     return NULL;
@@ -402,6 +414,13 @@ static GtkWidget *CalendarView(GtkWindow *window) {
   evData->buffer = GTK_TEXT_BUFFER(fileContentBuffer);
   evData->canvas_container = GTK_BOX(processBox);
   evData->step_label = GTK_LABEL(tickLabel);
+
+  GtkWidget *backButton = MainButton("Back", handle_previous_click, evData);
+  gtk_box_append(GTK_BOX(simControlsBox), backButton);
+  // GtkWidget *ppButton = MainButton("Pause/Play", NULL, NULL);
+  // gtk_box_append(GTK_BOX(simControlsBox), ppButton);
+  GtkWidget *nextButton = MainButton("Next", handle_next_click, evData);
+  gtk_box_append(GTK_BOX(simControlsBox), nextButton);
 
   GtkWidget *loadFileBtn =
       MainButton("Load File", handle_open_file_click, evData);

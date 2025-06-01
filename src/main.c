@@ -189,6 +189,7 @@ static void update_sim_canvas(SC_UpdateSimCanvasData params, SC_Err err) {
 static void setup_label_cb(GtkSignalListItemFactory *factory,
                            GObject *listitem) {
   GtkWidget *label = gtk_label_new(NULL);
+  gtk_widget_add_css_class(label, "pid_box");
   gtk_list_item_set_child(GTK_LIST_ITEM(listitem), label);
 }
 
@@ -197,6 +198,17 @@ static void bind_pid_cb(GtkSignalListItemFactory *factory,
   GtkWidget *label = gtk_list_item_get_child(listitem);
   GObject *item = gtk_list_item_get_item(GTK_LIST_ITEM(listitem));
   size_t pid_idx = sc_process_gio_get_pid_idx(SC_PROCESS_GIO(item));
+
+  for (int i = 0; i < 50; i++) {
+    char class[] = {'p', 'i', 'd', '_', 0, 0, 0, 0};
+    sprintf(class + strlen(class), "%d", i);
+    gtk_widget_remove_css_class(label, class);
+  }
+
+  char class[] = {'p', 'i', 'd', '_', 0, 0, 0, 0};
+  sprintf(class + strlen(class), "%zu", pid_idx);
+  // gtk_widget_remove_css_class(label, class);
+  gtk_widget_add_css_class(label, class);
 
   fprintf(stderr, "INFO: Binding to pid_idx %zu\n", pid_idx);
 

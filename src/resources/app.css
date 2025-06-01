@@ -1,28 +1,28 @@
 #simContainer {
-	background-color: red;
+	/* background-color: red; */
 	padding: 1rem;
 }
 
 #controlsContainer {
-	background-color: blue;
+	/* background-color: blue; */
 	padding: 1rem;
 }
 
 #simBox {
-	background-color: purple;
+	/* background-color: purple; */
 	padding-bottom: 1rem;
 }
 
 #processBox {
-	background-color: orange;
+	/* background-color: orange; */
 }
 
 #algorithmSelectionContainer {
-	background-color: skyblue;
+	/* background-color: skyblue; */
 }
 
 #loadFileContainer {
-	background-color: pink;
+	/* background-color: pink; */
 }
 
 .h1_title{

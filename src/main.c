@@ -139,8 +139,8 @@ static void update_sim_canvas(SC_UpdateSimCanvasData params, SC_Err err) {
     gtk_box_remove(params.canvas_container, widget);
   }
 
-  char str[] = {'C', 'u', 'r', 'r', 'e', 'n', 't', ' ', 'S',
-                't', 'e', 'p', ':', ' ', 0,   0,   0};
+  char str[] = {'C', 'u', 'r', 'r', 'e', 'n', 't', ' ', 'S', 't',
+                'e', 'p', ':', ' ', 0,   0,   0,   0,   0};
   sprintf(str + strlen(str), "%zu", SIM_STATE->current_step);
   gtk_label_set_label(params.step_label, str);
 
@@ -157,8 +157,13 @@ static void update_sim_canvas(SC_UpdateSimCanvasData params, SC_Err err) {
       return;
     }
 
-    GtkWidget *button = gtk_button_new_with_label(pid_str.data);
-    gtk_box_append(params.canvas_container, button);
+    char css_class[] = {'p', 'i', 'd', '_', 0, 0, 0, 0, 0, 0, 0, 0};
+    sprintf(css_class + strlen(css_class), "%zu", pid_idx);
+
+    GtkWidget *label = gtk_label_new(pid_str.data);
+    gtk_box_append(params.canvas_container, label);
+    gtk_widget_add_css_class(label, css_class);
+    gtk_widget_add_css_class(label, "pid_box");
 
     SC_Bool is_last_iteration = i == SIM_STATE->current_step;
     if (is_last_iteration) {
@@ -418,6 +423,7 @@ GtkWidget *MainButton(const char *label,
                       void *ev_data) {
   GtkWidget *btn = gtk_button_new_with_label(label);
   gtk_widget_add_css_class(btn, "btn_main");
+  gtk_widget_remove_css_class(btn, "text-button");
   if (NULL != onClick) {
     g_signal_connect(btn, "clicked", G_CALLBACK(onClick), ev_data);
   }
@@ -473,6 +479,7 @@ static GtkWidget *CalendarView(GtkWindow *window) {
                                 processBox);
 
   GtkWidget *p1Btn = MainButton("P1 Button example", NULL, NULL);
+  gtk_widget_set_name(p1Btn, "ExampleButton");
   gtk_box_append(GTK_BOX(processBox), p1Btn);
   GtkWidget *p2Btn = MainButton("P2 Button example", NULL, NULL);
   gtk_box_append(GTK_BOX(processBox), p2Btn);

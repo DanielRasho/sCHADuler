@@ -348,6 +348,99 @@ void SC_StringList_Append(SC_StringList *list, struct SC_Arena *arena,
   list->count++;
 }
 
+// ===========
+//  SLICES
+// ===========
+
+/**
+ * A generic dynamic array (slice) implementation.
+ * Stores a list of elements of any type using `void*` and manages resizing
+ * automatically.
+ * How to iterate:
+ *
+ *  Resource* resources = (Resource*)slice.data;
+ *  for (size_t i = 0; i < slice.length; i++) {
+ *      Resource r = resources[i];
+ *     printf("Resource ID: %d, Counter: %d\n", r.id, r.counter);
+ *  }
+ */
+typedef struct {
+  void *data;
+  /** Number of elements currently in the slice. */
+  size_t length;
+
+  /** Maximum number of elements the slice can hold before reallocating. */
+  size_t capacity;
+
+  /** Size (in bytes) of each element. Required for generic memory operations.
+   */
+  size_t element_size;
+} SC_Slice;
+
+/**
+ * Initializes a new slice with a given element size and initial capacity.
+ *
+ * @param s Pointer to the SC_Slice to initialize.
+ * @param element_size Size of each element in bytes.
+ * @param initial_capacity Initial number of elements the slice can hold.
+ */
+void SC_Slice_init(SC_Slice *s, size_t element_size, size_t initial_capacity) {
+  s->data = malloc(element_size * initial_capacity);
+  if (!s->data) {
+    perror("malloc failed");
+    exit(1);
+  }
+  s->length = 0;
+  s->capacity = initial_capacity;
+  s->element_size = element_size;
+}
+
+/**
+ * Appends a new element to the slice. Automatically reallocates
+ * if the current capacity is exceeded.
+ *
+ * @param s Pointer to the SC_Slice to append to.
+ * @param element Pointer to the element to append.
+ */
+void SC_Slice_append(SC_Slice *s, void *element) {
+  if (s->length == s->capacity) {
+    size_t new_capacity = s->capacity * 2;
+    void *new_data = malloc(s->element_size * new_capacity);
+    if (!new_data) {
+      perror("realloc failed");
+      exit(1);
+    }
+
+    memcpy(new_data, s->data, s->element_size * s->length);
+    free(s->data);
+    s->data = new_data;
+    s->capacity = new_capacity;
+  }
+
+  void *dest = (char *)s->data + (s->length * s->element_size);
+  memcpy(dest, element, s->element_size);
+  s->length++;
+}
+
+/**
+ * Frees the memory used by the slice and resets its fields.
+ *
+ * @param s Pointer to the SC_Slice to deinitialize.
+ */
+void SC_Slice_deinit(SC_Slice *s) {
+  free(s->data);
+  s->data = NULL;
+  s->length = 0;
+  s->capacity = 0;
+  s->element_size = 0;
+}
+
+// ##################################
+// #                                #
+// #       CALENDARIZER             #
+// #                                #
+// ##################################
+
 typedef struct {
   size_t pid_idx;
   uint burst_time;
@@ -519,3 +612,163 @@ void parse_scheduling_file(SC_String *file_contents,
     }
   }
 }
+
+// ##################################
+// #                                #
+// #       MUTEX/SEMPAHORES         #
+// #                                #
+// ##################################
+
+/**
+ * Represents the possible states of a process in the simulation.
+ */
+typedef enum {
+  /** The process is currently using a resource. */
+  STATE_ACCESSED,
+  /** The process is waiting for a resource to become available. */
+  STATE_WAITING,
+  /** The process does not need any resource but still has burst time to
+     consume. */
+  STATE_COMPUTING,
+  /** The process has completed all its burst time. */
+  STATE_FINISHED
+} SC_ProcessState;
+
+/**
+ * Defines the synchronization mechanism used by a resource.
+ */
+typedef enum {
+  /** Only one process can access the resource per cycle, regardless of
+     available instances. */
+  SYNC_MUTEX,
+  /** Up to "n" processes can access the resource concurrently. */
+  SYNC_SEMAPHORE
+} SC_SyncMechanism;
+
+/**
+ * Represents a process participating in the simulation.
+ */
+typedef struct {
+  int id;
+  /** Minimum number of cycles the process should run. */
+  int burst_time;
+  int arrival_time;
+  /**
+   * Determines execution order when multiple processes want the same resource.
+   * Lower numbers indicate higher priority. */
+  int priority;
+  /** The current execution state of the process. */
+  SC_ProcessState current_state;
+  /** Remaining cycles to run. */
+  int remaining_time;
+  /** Indicates whether the process is currently active. */
+  SC_Bool is_active;
+} SC_SyncProcess;
+
+/**
+ * Represents an action a process wants to perform on a resource.
+ */
+typedef struct {
+  /** ID of the process performing the action. */
+  int pid;
+  /** ID of the resource to access. */
+  int resource_id;
+  /**
+   * Cycle in which the action should be attempted.
+   * If a process must wait for the resource, this value is updated to the next
+   * cycle. */
+  int cycle;
+  /** Indicates whether this action has been executed. */
+  SC_Bool executed;
+  /** Process priority at the time of the action. */
+  int priority;
+} SC_Action;
+
+/**
+ * Represents a shared resource controlled by a synchronization mechanism.
+ */
+typedef struct {
+  int id;
+  /** For semaphores: available count. For mutexes: 1 or 0. */
+  int counter;
+  /** Maximum value the counter can hold (initial value). */
+  int max_counter;
+  /** Synchronization mechanism used (mutex or semaphore). */
+  SC_SyncMechanism sync_type;
+  /**
+   * Unordered list of actions related to this resource.
+   * Requires a full scan to process all actions.
+   */
+  SC_Action *actions;
+  /** Total number of actions in the list. */
+  int action_count;
+} Resource;
+
+/**
+ * Represents a single step in a process's execution timeline.
+ * One entry must be generated per process for each simulation step
+ * until the process finishes.
+ */
+typedef struct {
+  /** Process state in this cycle. */
+  SC_ProcessState state;
+  /** ID of the action performed (if any). */
+  int action_id;
+  /** ID of the resource used, or -1 if none. */
+  int resource_id;
+} ProcessTimelineEntry;
+
+/**
+ * Represents the execution history of a process.
+ */
+typedef struct {
+  int id;
+
+  /**
+   * Dynamic list of timeline entries representing each simulation step.
+   * Automatically grows as new entries are appended.
+   */
+  SC_Slice entries;
+} ProcessTimeline;
+
+/**
+ * Represents the full state of the simulation.
+ * Updated on each step to reflect the new state and register timeline actions.
+ */
+typedef struct {
+  /** List of all processes in the simulation. */
+  SC_SyncProcess *processes;
+  int process_count;
+
+  /** List of all resources used in the simulation. */
+  Resource *resources;
+  int resource_count;
+
+  /** One timeline per process, tracking its execution history. */
+  ProcessTimeline *process_timelines;
+  int timeline_count;
+
+  /** Current simulation cycle. */
+  int current_cycle;
+
+  /** Indicates whether the simulation is still running. */
+  SC_Bool simulation_running;
+
+  /** Total number of simulation cycles. */
+  int total_cycles;
+} SC_SyncSimulator;
+
+/**
+ * Takes a Simulation objects and computes its next step inplace
+ *
+ * SIMULATION ==> f(x) ==> NEW SIMULATION
+ *
+ * The next step should be registered on
+ */
+void SC_SyncSimulator_next(SC_SyncSimulator *s) {}
+
+void parse_syncProcess_file(SC_String *file_contents,
+                            struct SC_Arena *pids_arena,
+                            struct SC_Arena *processes_arena,
+                            SC_StringList *pid_list, SC_ProcessList *processes,
+                            SC_Err err) {}

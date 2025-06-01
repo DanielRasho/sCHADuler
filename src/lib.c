@@ -5,31 +5,32 @@
 #include <string.h>
 
 typedef size_t *SC_Err;
-static const SC_Err NO_ERROR = (size_t *)0;
-static const SC_Err NOT_FOUND = (size_t *)1;
-static const SC_Err MALLOC_FAILED = (size_t *)2;
-static const SC_Err ARENA_ALLOC_NO_SPACE = (size_t *)3;
-static const SC_Err OUT_OF_BOUNDS = (size_t *)4;
-static const SC_Err EMPTY_STRING = (size_t *)5;
-static const SC_Err INVALID_STRING = (size_t *)6;
-static const SC_Err INVALID_TXT_FILE = (size_t *)7;
+static const size_t NO_ERROR = 1;
+static const size_t NOT_FOUND = 2;
+static const size_t MALLOC_FAILED = 3;
+static const size_t ARENA_ALLOC_NO_SPACE = 4;
+static const size_t OUT_OF_BOUNDS = 5;
+static const size_t EMPTY_STRING = 6;
+static const size_t INVALID_STRING = 7;
+static const size_t INVALID_TXT_FILE = 8;
 
 static const char *SC_Err_ToString(SC_Err err) {
-  if (err == NO_ERROR) {
+  size_t val = *err;
+  if (val == NO_ERROR) {
     return "No error found!";
-  } else if (err == NOT_FOUND) {
+  } else if (val == NOT_FOUND) {
     return "Element was not found!";
-  } else if (err == MALLOC_FAILED) {
+  } else if (val == MALLOC_FAILED) {
     return "malloc failed! Maybe out of memory?";
-  } else if (err == ARENA_ALLOC_NO_SPACE) {
+  } else if (val == ARENA_ALLOC_NO_SPACE) {
     return "Arena is out of space!";
-  } else if (err == OUT_OF_BOUNDS) {
+  } else if (val == OUT_OF_BOUNDS) {
     return "Tried to access an index out of bounds!";
-  } else if (err == EMPTY_STRING) {
+  } else if (val == EMPTY_STRING) {
     return "Tried to do some operation on an empty string!";
-  } else if (err == INVALID_STRING) {
+  } else if (val == INVALID_STRING) {
     return "The supplied string is invalid for the operation!";
-  } else if (err == INVALID_TXT_FILE) {
+  } else if (val == INVALID_TXT_FILE) {
     return "The supplied TXT file is invalid!";
   } else {
     return "INVALID ERROR VALUE RECEIVED!";
@@ -109,7 +110,7 @@ void SC_Arena_Init(struct SC_Arena *arena, size_t initial_capacity,
 
   char *data = malloc(initial_capacity);
   if (NULL == data) {
-    err = MALLOC_FAILED;
+    *err = MALLOC_FAILED;
     return;
   }
 
@@ -131,7 +132,7 @@ void *SC_Arena_Alloc(struct SC_Arena *arena, size_t requested_size,
     return NULL;
   }
 
-  SC_Bool has_space = arena->count + requested_size < arena->capacity;
+  SC_Bool has_space = arena->count + requested_size <= arena->capacity;
   if (has_space) {
     char *p = arena->data + arena->count;
     arena->count += requested_size;
@@ -146,7 +147,7 @@ void *SC_Arena_Alloc(struct SC_Arena *arena, size_t requested_size,
 
     arena->next = malloc(sizeof(struct SC_Arena));
     if (NULL == arena) {
-      err = MALLOC_FAILED;
+      *err = MALLOC_FAILED;
       return NULL;
     }
     SC_Arena_Init(arena->next, next_capacity, err);
@@ -202,6 +203,18 @@ SC_String SC_String_FromCString(char *c_str) {
   return str;
 }
 
+const char *SC_String_ToCString(SC_String *str, struct SC_Arena *arena,
+                                SC_Err err) {
+  char *space = SC_Arena_Alloc(arena, str->length + 1, err);
+  if (*err != NO_ERROR) {
+    return NULL;
+  }
+
+  memcpy(space, str->data, str->length);
+  space[str->length] = 0;
+  return space;
+}
+
 char SC_String_CharAt(SC_String *str, size_t idx) {
   if (idx < 0 || idx >= str->length) {
     SC_PANIC("Trying to access an invalid Index! %d from %*s", idx, str->length,
@@ -216,7 +229,7 @@ SC_String SC_String_CopyOnArena(struct SC_Arena *arena, SC_String *other,
                                 SC_Err err) {
   SC_String str = {};
   str.data = SC_Arena_Alloc(arena, other->length, err);
-  if (err != NO_ERROR) {
+  if (*err != NO_ERROR) {
     return str;
   }
 
@@ -234,7 +247,7 @@ SC_String SC_String_CopyOnArena(struct SC_Arena *arena, SC_String *other,
  */
 void SC_String_AppendChar(SC_String *str, char value, SC_Err err) {
   if (str->length >= str->data_capacity) {
-    err = OUT_OF_BOUNDS;
+    *err = OUT_OF_BOUNDS;
   } else {
     str->data[str->length] = value;
     str->length++;
@@ -250,7 +263,7 @@ void SC_String_AppendChar(SC_String *str, char value, SC_Err err) {
  */
 int SC_String_ParseInt(SC_String *str, SC_Err err) {
   if (str->length <= 0) {
-    err = EMPTY_STRING;
+    *err = EMPTY_STRING;
     return 0;
   }
 
@@ -265,7 +278,7 @@ int SC_String_ParseInt(SC_String *str, SC_Err err) {
     } break;
     case '-': {
       if (result != 0) {
-        err = INVALID_STRING;
+        *err = INVALID_STRING;
         return 0;
       }
 
@@ -274,13 +287,13 @@ int SC_String_ParseInt(SC_String *str, SC_Err err) {
 
     case ' ' | '\t' | '\n' | '\r': {
       if (result != 0) {
-        err = INVALID_STRING;
+        *err = INVALID_STRING;
         return 0;
       }
     } break;
 
     default: {
-      err = INVALID_STRING;
+      *err = INVALID_STRING;
       return 0;
     } break;
     }
@@ -322,12 +335,12 @@ void SC_StringList_Append(SC_StringList *list, struct SC_Arena *arena,
                           SC_String str, SC_Err err) {
   struct SC_StringList_Node *node =
       SC_Arena_Alloc(arena, sizeof(struct SC_StringList_Node), err);
-  if (err != NO_ERROR) {
+  if (*err != NO_ERROR) {
     return;
   }
 
   SC_String new_str = SC_String_CopyOnArena(arena, &str, err);
-  if (err != NO_ERROR) {
+  if (*err != NO_ERROR) {
     return;
   }
 
@@ -348,6 +361,22 @@ void SC_StringList_Append(SC_StringList *list, struct SC_Arena *arena,
   list->count++;
 }
 
+SC_String SC_StringList_GetAt(SC_StringList *list, size_t idx, SC_Err err) {
+  SC_String sb = {};
+
+  struct SC_StringList_Node *current = list->head;
+  for (int i = 0; current != NULL && i < idx; i++) {
+    current = current->next;
+  }
+
+  if (current == NULL) {
+    *err = NOT_FOUND;
+  } else {
+    sb = current->value;
+  }
+
+  return sb;
+}
 typedef struct {
   size_t pid_idx;
   uint burst_time;
@@ -382,7 +411,7 @@ void SC_ProcessList_Append(SC_ProcessList *list, struct SC_Arena *arena,
                            SC_Process process, SC_Err err) {
   struct SC_ProcessList_Node *node =
       SC_Arena_Alloc(arena, sizeof(struct SC_ProcessList_Node), err);
-  if (err != NO_ERROR) {
+  if (*err != NO_ERROR) {
     return;
   }
 
@@ -401,6 +430,23 @@ void SC_ProcessList_Append(SC_ProcessList *list, struct SC_Arena *arena,
   }
 
   list->count++;
+}
+
+SC_Process SC_ProcessList_GetAt(SC_ProcessList *list, size_t idx, SC_Err err) {
+  SC_Process sb = {};
+
+  struct SC_ProcessList_Node *current = list->head;
+  for (int i = 0; current != NULL && i < idx; i++) {
+    current = current->next;
+  }
+
+  if (current == NULL) {
+    *err = NOT_FOUND;
+  } else {
+    sb = current->value;
+  }
+
+  return sb;
 }
 
 /**
@@ -435,8 +481,16 @@ typedef struct {
  */
 void simulate_first_in_first_out(SC_ProcessList *processes,
                                  SC_Simulation *sim) {
-  // Guide to initialize arrays and use the arrays:
-  // https://en.wikipedia.org/wiki/Flexible_array_member
+  // TODO: Fill with real data and not this dummy data...
+
+  int i = 0;
+  for (struct SC_ProcessList_Node *current = processes->head; current != NULL;
+       current = current->next) {
+    sim->steps[0].processes[i] = current->value;
+    sim->steps[0].current_process = 0;
+    sim->steps[0].process_length = 1;
+    i++;
+  }
 }
 
 void parse_scheduling_file(SC_String *file_contents,
@@ -462,18 +516,18 @@ void parse_scheduling_file(SC_String *file_contents,
     case '\n': {
 
       if (4 != current_column) {
-        err = INVALID_TXT_FILE;
+        *err = INVALID_TXT_FILE;
         return;
       }
 
       int column_value = SC_String_ParseInt(&buffer, err);
-      if (err != NO_ERROR) {
+      if (*err != NO_ERROR) {
         return;
       }
       current_process.priority = column_value;
 
       SC_ProcessList_Append(processes, processes_arena, current_process, err);
-      if (err != NO_ERROR) {
+      if (*err != NO_ERROR) {
         return;
       }
 
@@ -486,13 +540,13 @@ void parse_scheduling_file(SC_String *file_contents,
     case ',': {
       if (1 == current_column) {
         SC_StringList_Append(pid_list, pids_arena, buffer, err);
-        if (err != NO_ERROR) {
+        if (*err != NO_ERROR) {
           return;
         }
         current_process.pid_idx = pid_list->count - 1;
       } else {
         int column_value = SC_String_ParseInt(&buffer, err);
-        if (err != NO_ERROR) {
+        if (*err != NO_ERROR) {
           return;
         }
 
@@ -501,7 +555,7 @@ void parse_scheduling_file(SC_String *file_contents,
         } else if (3 == current_column) {
           current_process.arrival_time = column_value;
         } else {
-          err = INVALID_TXT_FILE;
+          *err = INVALID_TXT_FILE;
           return;
         }
       }
@@ -512,7 +566,7 @@ void parse_scheduling_file(SC_String *file_contents,
 
     default: {
       SC_String_AppendChar(&buffer, current_char, err);
-      if (err != NO_ERROR) {
+      if (*err != NO_ERROR) {
         return;
       }
     }

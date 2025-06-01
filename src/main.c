@@ -27,6 +27,7 @@ const static size_t INITIAL_PROCESSES = 15;
 typedef struct {
   GtkWindow *window;
   GtkTextBuffer *buffer;
+  GtkBox *button_container;
 } SC_OpenFileEVData;
 
 typedef int SC_Algorithm;
@@ -55,6 +56,7 @@ static struct SC_Arena PIDS_ARENA;
 static SC_StringList PID_LIST;
 
 static SC_Simulation *SIM_STATE;
+static struct SC_Arena SIM_BTN_LABELS_ARENA;
 
 // ################################
 // ||                            ||
@@ -113,11 +115,11 @@ static void file_dialog_finished(GObject *source_object, GAsyncResult *res,
   SC_StringList_Reset(&PID_LIST);
   SC_ProcessList_Reset(&PROCESS_LIST);
 
-  SC_Err err = NO_ERROR;
+  size_t err = NO_ERROR;
   parse_scheduling_file(&file_contents, &PIDS_ARENA, &PROCESS_LIST_ARENA,
-                        &PID_LIST, &PROCESS_LIST, err);
+                        &PID_LIST, &PROCESS_LIST, &err);
   if (err != NO_ERROR) {
-    fprintf(stderr, "ERROR: %s", SC_Err_ToString(err));
+    fprintf(stderr, "ERROR: %s", SC_Err_ToString(&err));
   } else {
     fprintf(stderr, "Correctly parsed the file!");
   }
@@ -136,9 +138,9 @@ static void file_dialog_finished(GObject *source_object, GAsyncResult *res,
       sizeof(SC_Simulation) +
           (sizeof(SC_SimStepState) + sizeof(SC_Process) * total_processes) *
               total_steps,
-      err);
+      &err);
   if (err != NO_ERROR) {
-    fprintf(stderr, "ERROR: %s", SC_Err_ToString(err));
+    fprintf(stderr, "ERROR: %s", SC_Err_ToString(&err));
     exit(1);
   }
 
@@ -151,6 +153,49 @@ static void file_dialog_finished(GObject *source_object, GAsyncResult *res,
     simulate_first_in_first_out(&PROCESS_LIST, SIM_STATE);
   }
   // TODO: Add another algorithms...
+
+  GtkWidget *widget =
+      gtk_widget_get_first_child(GTK_WIDGET(ev_data->button_container));
+  GtkWidget *next;
+  if (widget != NULL) {
+    gtk_box_remove(ev_data->button_container, widget);
+    while ((next = gtk_widget_get_next_sibling(widget)) != NULL) {
+      widget = next;
+      gtk_box_remove(ev_data->button_container, widget);
+    }
+  }
+
+  SC_Arena_Reset(&SIM_BTN_LABELS_ARENA);
+  for (int i = 0; i <= SIM_STATE->current_step; i++) {
+    size_t current_process = SIM_STATE->steps[i].current_process;
+    size_t pid_idx = SIM_STATE->steps[i].processes[current_process].pid_idx;
+    SC_String pid_str = SC_StringList_GetAt(&PID_LIST, pid_idx, &err);
+    if (err != NO_ERROR) {
+      fprintf(stderr,
+              "SIM_STEP_ERROR (%d): Failed to get pid for process (idx: %zu): "
+              "Failed to get PID from stringlist with idx: %zu",
+              i, current_process, pid_idx);
+      return;
+    }
+    if (err != NO_ERROR) {
+      fprintf(stderr,
+              "SIM_STEP_ERROR (%d): Failed to get pid for process (idx: %zu): "
+              "Failed to allocate enough space for arena for pid idx: %zu",
+              i, current_process, pid_idx);
+      return;
+    }
+    const char *pid_c_str =
+        SC_String_ToCString(&pid_str, &SIM_BTN_LABELS_ARENA, &err);
+    if (err != NO_ERROR) {
+      fprintf(stderr,
+              "SIM_STEP_ERROR (%d): Failed to get pid for process (idx: %zu): "
+              "Failed to transform SC_String (`%*s`) into c_str",
+              i, current_process, (int)pid_str.length, pid_str.data);
+      return;
+    }
+    GtkWidget *button = gtk_button_new_with_label(pid_c_str);
+    gtk_box_append(ev_data->button_container, button);
+  }
 }
 
 static void handle_open_file_click(GtkWidget *widget, gpointer data) {
@@ -210,13 +255,16 @@ static GtkWidget *CalendarView(GtkWindow *window) {
   gtk_widget_set_hexpand(simBox, TRUE);
   gtk_paned_set_start_child(GTK_PANED(simContainer), simBox);
 
-  GtkWidget *topSimBox = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
+  GtkWidget *topSimBox = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 10);
   gtk_widget_set_hexpand(topSimBox, TRUE);
   gtk_widget_set_halign(topSimBox, GTK_ALIGN_START);
   gtk_box_append(GTK_BOX(simBox), topSimBox);
 
   GtkWidget *resetBtn = MainButton("RESET", NULL, NULL);
   gtk_box_append(GTK_BOX(topSimBox), resetBtn);
+
+  GtkWidget *tickLabel = gtk_label_new("Current Step: XX");
+  gtk_box_append(GTK_BOX(topSimBox), tickLabel);
 
   GtkWidget *processBoxScroller = gtk_scrolled_window_new();
   gtk_widget_set_vexpand(processBoxScroller, TRUE);
@@ -251,8 +299,7 @@ static GtkWidget *CalendarView(GtkWindow *window) {
   gtk_widget_set_hexpand(simBox, TRUE);
   gtk_paned_set_end_child(GTK_PANED(simContainer), processInfoBox);
 
-  const char *exampleFileContents =
-      "P1, 8, 7, 1\nP2, 4, 15, 2\nP3, 16, 2, 3\nP4, 20, 0, 50";
+  const char *exampleFileContents = "NO FILE LOADED!";
   GtkTextBuffer *fileContentBuffer = gtk_text_buffer_new(NULL);
   gtk_text_buffer_set_text(fileContentBuffer, exampleFileContents,
                            strlen(exampleFileContents));
@@ -328,6 +375,7 @@ static GtkWidget *CalendarView(GtkWindow *window) {
 
   evData->window = window;
   evData->buffer = GTK_TEXT_BUFFER(fileContentBuffer);
+  evData->button_container = GTK_BOX(processBox);
 
   GtkWidget *loadFileBtn =
       MainButton("Load File", handle_open_file_click, evData);
@@ -395,9 +443,9 @@ int main(int argc, char **argv) {
   SC_ProcessList_Init(&PROCESS_LIST);
   SC_StringList_Init(&PID_LIST);
 
-  SC_Err err = NO_ERROR;
+  size_t err = NO_ERROR;
   SC_Arena_Init(&PROCESS_LIST_ARENA, sizeof(SC_Process) * INITIAL_PROCESSES,
-                err);
+                &err);
   if (err != NO_ERROR) {
     fprintf(stderr, "FATAL: Failed to initialize process arena!");
     return 1;
@@ -405,7 +453,7 @@ int main(int argc, char **argv) {
 
   SC_Arena_Init(&PIDS_ARENA,
                 (sizeof(SC_String) + sizeof(char) * 10) * INITIAL_PROCESSES,
-                err);
+                &err);
   if (err != NO_ERROR) {
     fprintf(stderr, "FATAL: Failed to initialize pids arena!");
     SC_Arena_Deinit(&PROCESS_LIST_ARENA);
@@ -417,11 +465,21 @@ int main(int argc, char **argv) {
       sizeof(SC_Simulation) +
           (sizeof(SC_SimStepState) + sizeof(SC_Process) * INITIAL_PROCESSES) *
               INITIAL_PROCESSES * 5,
-      err);
+      &err);
   if (err != NO_ERROR) {
     fprintf(stderr, "FATAL: Failed to initialize simulation arena!");
     SC_Arena_Deinit(&PROCESS_LIST_ARENA);
     SC_Arena_Deinit(&PIDS_ARENA);
+    return 1;
+  }
+
+  SC_Arena_Init(&SIM_BTN_LABELS_ARENA, sizeof(char) * 10 * INITIAL_PROCESSES,
+                &err);
+  if (err != NO_ERROR) {
+    fprintf(stderr, "FATAL: Failed to initialize btn labels arena!");
+    SC_Arena_Deinit(&PROCESS_LIST_ARENA);
+    SC_Arena_Deinit(&PIDS_ARENA);
+    SC_Arena_Deinit(&SIM_ARENA);
     return 1;
   }
 
@@ -436,6 +494,7 @@ int main(int argc, char **argv) {
     SC_Arena_Deinit(&PROCESS_LIST_ARENA);
     SC_Arena_Deinit(&PIDS_ARENA);
     SC_Arena_Deinit(&SIM_ARENA);
+    SC_Arena_Deinit(&SIM_BTN_LABELS_ARENA);
     return 1;
   }
 
@@ -453,5 +512,6 @@ int main(int argc, char **argv) {
   SC_Arena_Deinit(&PROCESS_LIST_ARENA);
   SC_Arena_Deinit(&PIDS_ARENA);
   SC_Arena_Deinit(&SIM_ARENA);
+  SC_Arena_Deinit(&SIM_BTN_LABELS_ARENA);
   return status;
 }

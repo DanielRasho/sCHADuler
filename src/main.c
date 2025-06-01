@@ -509,6 +509,7 @@ int main(int argc, char **argv) {
   int status = g_application_run(G_APPLICATION(app), argc, argv);
   g_object_unref(app);
 
+  fprintf(stderr, "INFO: deiniting all arenas");
   SC_Arena_Deinit(&PROCESS_LIST_ARENA);
   SC_Arena_Deinit(&PIDS_ARENA);
   SC_Arena_Deinit(&SIM_ARENA);

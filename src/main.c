@@ -165,6 +165,7 @@ static void update_sim_canvas(SC_UpdateSimCanvasData params, SC_Err err) {
       g_list_store_remove_all(params.info_store);
       for (int j = 0; j < SIM_STATE->steps[i].process_length; j++) {
         SC_Process current = SIM_STATE->steps[i].processes[j];
+        fprintf(stderr, "INFO: Appending value to store\n");
         g_list_store_append(
             params.info_store,
             sc_process_gio_new(current.pid_idx, current.burst_time,
@@ -192,6 +193,8 @@ static void bind_pid_cb(GtkSignalListItemFactory *factory,
   GObject *item = gtk_list_item_get_item(GTK_LIST_ITEM(listitem));
   size_t pid_idx = sc_process_gio_get_pid_idx(SC_PROCESS_GIO(item));
 
+  fprintf(stderr, "INFO: Binding to pid_idx %zu\n", pid_idx);
+
   size_t err = NO_ERROR;
   SC_String str = SC_StringList_GetAt(&PID_LIST, pid_idx, &err);
   if (err != NO_ERROR) {
@@ -201,6 +204,39 @@ static void bind_pid_cb(GtkSignalListItemFactory *factory,
   }
 
   gtk_label_set_text(GTK_LABEL(label), str.data);
+}
+
+static void bind_burst_time_cb(GtkSignalListItemFactory *factory,
+                               GtkListItem *listitem) {
+  GtkWidget *label = gtk_list_item_get_child(listitem);
+  GObject *item = gtk_list_item_get_item(GTK_LIST_ITEM(listitem));
+  uint time = sc_process_gio_get_burst_time(SC_PROCESS_GIO(item));
+
+  char buff[10] = {0};
+  sprintf(buff, "%d", time);
+  gtk_label_set_text(GTK_LABEL(label), buff);
+}
+
+static void bind_arrival_time_cb(GtkSignalListItemFactory *factory,
+                                 GtkListItem *listitem) {
+  GtkWidget *label = gtk_list_item_get_child(listitem);
+  GObject *item = gtk_list_item_get_item(GTK_LIST_ITEM(listitem));
+  uint time = sc_process_gio_get_arrival_time(SC_PROCESS_GIO(item));
+
+  char buff[10] = {0};
+  sprintf(buff, "%d", time);
+  gtk_label_set_text(GTK_LABEL(label), buff);
+}
+
+static void bind_priority_cb(GtkSignalListItemFactory *factory,
+                             GtkListItem *listitem) {
+  GtkWidget *label = gtk_list_item_get_child(listitem);
+  GObject *item = gtk_list_item_get_item(GTK_LIST_ITEM(listitem));
+  uint priority = sc_process_gio_get_priority(SC_PROCESS_GIO(item));
+
+  char buff[10] = {0};
+  sprintf(buff, "%d", priority);
+  gtk_label_set_text(GTK_LABEL(label), buff);
 }
 
 // ################################
@@ -450,20 +486,45 @@ static GtkWidget *CalendarView(GtkWindow *window) {
   gtk_widget_set_hexpand(simBox, TRUE);
   gtk_paned_set_end_child(GTK_PANED(simContainer), processInfoBox);
 
-  GListStore *processModel = g_list_store_new(G_TYPE_OBJECT);
-  g_list_store_append(processModel, sc_process_gio_new(0, 0, 0, 0));
+  GListStore *processStore = g_list_store_new(G_TYPE_OBJECT);
+  g_list_store_append(processStore, sc_process_gio_new(0, 0, 0, 0));
   fprintf(stderr, "INFO: Creating selection model...\n");
   GtkNoSelection *selectionModel =
-      gtk_no_selection_new(G_LIST_MODEL(processModel));
+      gtk_no_selection_new(G_LIST_MODEL(processStore));
   GtkWidget *tableView =
       gtk_column_view_new(GTK_SELECTION_MODEL(selectionModel));
   gtk_box_append(GTK_BOX(processInfoBox), tableView);
+  gtk_widget_set_vexpand(tableView, TRUE);
+  gtk_widget_set_hexpand(tableView, TRUE);
   gtk_column_view_set_show_column_separators(GTK_COLUMN_VIEW(tableView), TRUE);
 
-  // PID cell factory
+  // PID column setup
   GtkListItemFactory *factory = gtk_signal_list_item_factory_new();
   g_signal_connect(factory, "setup", G_CALLBACK(setup_label_cb), NULL);
   g_signal_connect(factory, "bind", G_CALLBACK(bind_pid_cb), NULL);
+  GtkColumnViewColumn *col = gtk_column_view_column_new("PID", factory);
+  gtk_column_view_append_column(GTK_COLUMN_VIEW(tableView), col);
+
+  // Burst time column setup
+  factory = gtk_signal_list_item_factory_new();
+  g_signal_connect(factory, "setup", G_CALLBACK(setup_label_cb), NULL);
+  g_signal_connect(factory, "bind", G_CALLBACK(bind_burst_time_cb), NULL);
+  col = gtk_column_view_column_new("Burst Time", factory);
+  gtk_column_view_append_column(GTK_COLUMN_VIEW(tableView), col);
+
+  // Arrival time column setup
+  factory = gtk_signal_list_item_factory_new();
+  g_signal_connect(factory, "setup", G_CALLBACK(setup_label_cb), NULL);
+  g_signal_connect(factory, "bind", G_CALLBACK(bind_arrival_time_cb), NULL);
+  col = gtk_column_view_column_new("Arrival Time", factory);
+  gtk_column_view_append_column(GTK_COLUMN_VIEW(tableView), col);
+
+  // Priority column setup
+  factory = gtk_signal_list_item_factory_new();
+  g_signal_connect(factory, "setup", G_CALLBACK(setup_label_cb), NULL);
+  g_signal_connect(factory, "bind", G_CALLBACK(bind_priority_cb), NULL);
+  col = gtk_column_view_column_new("Priority", factory);
+  gtk_column_view_append_column(GTK_COLUMN_VIEW(tableView), col);
 
   // Algorithm selection and load new file half
   GtkWidget *controlsContainer = gtk_box_new(GTK_ORIENTATION_VERTICAL, 5);
@@ -534,7 +595,7 @@ static GtkWidget *CalendarView(GtkWindow *window) {
   evData->new_file_loaded.spin_button = GTK_SPIN_BUTTON(quantumEntry);
   evData->update_sim_canvas.canvas_container = GTK_BOX(processBox);
   evData->update_sim_canvas.step_label = GTK_LABEL(tickLabel);
-  evData->update_sim_canvas.info_store = processModel;
+  evData->update_sim_canvas.info_store = processStore;
 
   GtkWidget *backButton = MainButton("Back", handle_previous_click, evData);
   gtk_box_append(GTK_BOX(simControlsBox), backButton);

@@ -628,11 +628,9 @@ void simulate_first_in_first_out(SC_ProcessList *processes,
 
     current = current->next;
   }
-  print_simulation(sim);
 }
 
-void simulate_shortest_job_first(SC_ProcessList *processes,
-                                 SC_Simulation *sim) {
+void simulate_shortest_first(SC_ProcessList *processes, SC_Simulation *sim) {
   SC_ProcessList_sort(processes, compare_by_burst_time);
 
   int totalBurstTime = SC_Total_busrt_time(processes);
@@ -666,13 +664,44 @@ void simulate_shortest_job_first(SC_ProcessList *processes,
     current = current->next;
   }
 }
-
-void simulate_shortest_first(SC_ProcessList *processes, SC_Simulation *sim) {}
 void simulate_shortest_remaining(SC_ProcessList *processes,
                                  SC_Simulation *sim) {}
 void simulate_round_robin(SC_ProcessList *processes, SC_Simulation *sim,
                           int quantum) {}
-void simulate_priority(SC_ProcessList *processes, SC_Simulation *sim) {}
+void simulate_priority(SC_ProcessList *processes, SC_Simulation *sim) {
+  SC_ProcessList_sort(processes, compare_by_priority);
+
+  int totalBurstTime = SC_Total_busrt_time(processes);
+
+  sim->step_length = totalBurstTime;
+  sim->current_step = 0;
+  sim->steps = malloc(sizeof(SC_SimStepState) * totalBurstTime);
+
+  SC_ProcessList_Node *current = processes->head;
+  int time = 0;
+  while (current != NULL) {
+    SC_Process proc = current->value;
+
+    for (int i = 0; i < (int)proc.burst_time; i++) {
+      SC_SimStepState *step = &sim->steps[time];
+      step->current_process = proc.pid_idx;
+
+      step->process_length = processes->count;
+      step->processes = malloc(sizeof(SC_Process) * processes->count);
+
+      SC_ProcessList_Node *copy_node = processes->head;
+      int j = 0;
+      while (copy_node != NULL) {
+        step->processes[j++] = copy_node->value;
+        copy_node = copy_node->next;
+      }
+
+      time++;
+    }
+
+    current = current->next;
+  }
+}
 
 void parse_scheduling_file(SC_String *file_contents,
                            struct SC_Arena *pids_arena,

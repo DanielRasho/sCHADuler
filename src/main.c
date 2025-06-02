@@ -724,6 +724,8 @@ static GtkWidget *CalendarView(GtkWindow *window) {
     return NULL;
   }
 
+  evData->new_file_loaded.window = window;
+
   GtkWidget *container = gtk_paned_new(GTK_ORIENTATION_HORIZONTAL);
   gtk_widget_set_vexpand(container, TRUE);
   gtk_widget_set_hexpand(container, TRUE);
@@ -750,6 +752,7 @@ static GtkWidget *CalendarView(GtkWindow *window) {
   gtk_box_append(GTK_BOX(topSimBox), resetBtn);
 
   GtkWidget *tickLabel = gtk_label_new("Current Step: XX");
+  evData->update_sim_canvas.step_label = GTK_LABEL(tickLabel);
   gtk_box_append(GTK_BOX(topSimBox), tickLabel);
 
   GtkWidget *processBoxScroller = gtk_scrolled_window_new();
@@ -758,6 +761,8 @@ static GtkWidget *CalendarView(GtkWindow *window) {
   gtk_box_append(GTK_BOX(simBox), processBoxScroller);
 
   GtkWidget *processBox = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 1);
+  evData->update_sim_canvas.canvas_container = GTK_BOX(processBox);
+
   gtk_widget_set_hexpand(processBox, TRUE);
   gtk_widget_set_valign(processBox, GTK_ALIGN_CENTER);
   gtk_widget_set_halign(processBox, GTK_ALIGN_CENTER);
@@ -780,6 +785,8 @@ static GtkWidget *CalendarView(GtkWindow *window) {
   gtk_paned_set_end_child(GTK_PANED(simContainer), processInfoBox);
 
   GListStore *processStore = g_list_store_new(G_TYPE_OBJECT);
+  evData->update_sim_canvas.info_store = processStore;
+
   g_list_store_append(processStore, sc_process_gio_new(0, 0, 0, 0));
   fprintf(stderr, "INFO: Creating selection model...\n");
   GtkNoSelection *selectionModel =
@@ -834,6 +841,9 @@ static GtkWidget *CalendarView(GtkWindow *window) {
   gtk_widget_set_vexpand(algorithmSelectionContainer, TRUE);
   gtk_box_append(GTK_BOX(controlsContainer), algorithmSelectionContainer);
 
+  GListStore *reviewStore = g_list_store_new(G_TYPE_OBJECT);
+  evData->new_file_loaded.review_store = reviewStore;
+
   const char *algoNames[] = {
       "First In First Out", "Shortest Job First", "Shortest Remaining Time",
       "Round Robin",        "Priority",
@@ -865,7 +875,6 @@ static GtkWidget *CalendarView(GtkWindow *window) {
     }
   }
 
-  GListStore *reviewStore = g_list_store_new(G_TYPE_OBJECT);
   g_list_store_append(reviewStore, sc_algorithm_performance_new("TEST", 5.0));
   GtkNoSelection *reviewStoreSelectionModel =
       gtk_no_selection_new(G_LIST_MODEL(reviewStore));
@@ -896,14 +905,7 @@ static GtkWidget *CalendarView(GtkWindow *window) {
 
   GtkWidget *quantumEntry = gtk_spin_button_new_with_range(0, 1000, 1);
   gtk_widget_set_valign(quantumEntry, GTK_ALIGN_CENTER);
-
-  evData->new_file_loaded.window = window;
   evData->new_file_loaded.spin_button = GTK_SPIN_BUTTON(quantumEntry);
-  evData->new_file_loaded.review_store = reviewStore;
-
-  evData->update_sim_canvas.canvas_container = GTK_BOX(processBox);
-  evData->update_sim_canvas.step_label = GTK_LABEL(tickLabel);
-  evData->update_sim_canvas.info_store = processStore;
 
   GtkWidget *backButton = MainButton("Back", handle_previous_click, evData);
   gtk_box_append(GTK_BOX(simControlsBox), backButton);

@@ -234,3 +234,11 @@
 
 .main_content {
 }
+
+.alert_popup {
+	padding: 10px;
+}
+
+.alert_popup_btn {
+	margin-top: 20px;
+}

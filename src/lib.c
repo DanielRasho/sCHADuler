@@ -812,7 +812,7 @@ typedef struct {
   SC_Action *actions;
   /** Total number of actions in the list. */
   int action_count;
-} Resource;
+} SC_Resource;
 
 /**
  * Represents a single step in a process's execution timeline.
@@ -851,7 +851,7 @@ typedef struct {
   int process_count;
 
   /** List of all resources used in the simulation. */
-  Resource *resources;
+  SC_Resource *resources;
   int resource_count;
 
   /** One timeline per process, tracking its execution history. */

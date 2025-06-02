@@ -14,6 +14,8 @@
 // The program preallocates enough space for this processes.
 // If more than this quantity is required it allocates more.
 const static size_t INITIAL_PROCESSES = 15;
+const static size_t INITIAL_RESOURCES = 5;
+const static size_t INITIAL_ACTIONS = 15;
 
 // ################################
 // ||                            ||
@@ -943,6 +945,11 @@ int main(int argc, char **argv) {
   }
 
   // Syncronization
+
+  SC_StringList_Init(&SYNC_PROCESS_NAMES);
+  SC_StringList_Init(&SYNC_RESOURCES_NAMES);
+  SC_StringList_Init(&SYNC_ACTIONS_NAMES);
+
   static SC_String PROCESS_FILE_CONTENT = {
       .length = 0,
       .data = NULL,
@@ -958,6 +965,18 @@ int main(int argc, char **argv) {
       .data = NULL,
       .data_capacity = 0,
   };
+
+  SC_Arena_Init(&SYNC_SIM_STATE,
+                sizeof(SC_SyncSimulator) +
+                    sizeof(SC_SyncProcess) * INITIAL_PROCESSES +
+                    sizeof(SC_Action) * INITIAL_ACTIONS +
+                    sizeof(SC_Resource) * INITIAL_RESOURCES,
+                &err);
+  if (err != NO_ERROR) {
+    fprintf(stderr, "FATAL: Failed to initialize pids arena!\n");
+    SC_Arena_Deinit(&PROCESS_LIST_ARENA);
+    return 1;
+  }
 
   gtk_init();
 
@@ -990,5 +1009,7 @@ int main(int argc, char **argv) {
   SC_Arena_Deinit(&PIDS_ARENA);
   SC_Arena_Deinit(&SIM_ARENA);
   SC_Arena_Deinit(&SIM_BTN_LABELS_ARENA);
+  SC_Arena_Deinit(&SYNC_SIM_STATE);
+
   return status;
 }

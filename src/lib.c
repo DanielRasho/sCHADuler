@@ -628,7 +628,7 @@ void simulate_first_in_first_out(SC_ProcessList *processes,
 
     current = current->next;
   }
-  print_simulation(sim);
+  // print_simulation(sim);
 }
 
 void simulate_shortest_job_first(SC_ProcessList *processes,

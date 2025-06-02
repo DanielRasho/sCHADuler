@@ -39,6 +39,7 @@ typedef struct {
 typedef struct {
   GtkSpinButton *spin_button;
   GtkWindow *window;
+  GListStore *review_store;
 } SC_LoadedNewFileData;
 
 typedef struct {
@@ -455,6 +456,7 @@ static void file_dialog_finished(GObject *source_object, GAsyncResult *res,
     current = current->next;
   }
 
+  g_list_store_remove_all(ev_data.review_store);
   int quantum = gtk_spin_button_get_value_as_int(ev_data.spin_button);
   SC_Arena_Reset(&SIM_ARENA);
   for (int i = 0; i < SC_Priority; i++) {
@@ -485,18 +487,36 @@ static void file_dialog_finished(GObject *source_object, GAsyncResult *res,
     switch (i) {
     case SC_FirstInFirstOut: {
       simulate_first_in_first_out(&PROCESS_LIST, SIM_STATES[i]);
+      g_list_store_append(
+          ev_data.review_store,
+          sc_algorithm_performance_new("First In First Out",
+                                       SIM_STATES[i]->avg_waiting_time));
     } break;
     case SC_ShortestFirst: {
       simulate_shortest_first(&PROCESS_LIST, SIM_STATES[i]);
+      g_list_store_append(
+          ev_data.review_store,
+          sc_algorithm_performance_new("Shortest First",
+                                       SIM_STATES[i]->avg_waiting_time));
     } break;
     case SC_ShortestRemaining: {
       simulate_shortest_remaining(&PROCESS_LIST, SIM_STATES[i]);
+      g_list_store_append(
+          ev_data.review_store,
+          sc_algorithm_performance_new("Shortest Remaining",
+                                       SIM_STATES[i]->avg_waiting_time));
     } break;
     case SC_RoundRobin: {
       simulate_round_robin(&PROCESS_LIST, SIM_STATES[i], quantum);
+      g_list_store_append(ev_data.review_store,
+                          sc_algorithm_performance_new(
+                              "Round Robin", SIM_STATES[i]->avg_waiting_time));
     } break;
     case SC_Priority: {
       simulate_priority(&PROCESS_LIST, SIM_STATES[i]);
+      g_list_store_append(ev_data.review_store,
+                          sc_algorithm_performance_new(
+                              "Priority", SIM_STATES[i]->avg_waiting_time));
     } break;
     default: {
       SC_PANIC("FATAL: Unrecognized scheduling algorithm (%d)!", i);
@@ -868,9 +888,6 @@ static GtkWidget *CalendarView(GtkWindow *window) {
   col = gtk_column_view_column_new("AVG Waiting Time", factory);
   gtk_column_view_append_column(GTK_COLUMN_VIEW(reviewTable), col);
 
-  // GtkWidget *avgLabel = gtk_label_new("AVG: 0");
-  // gtk_box_append(GTK_BOX(algorithmSelectionContainer), avgLabel);
-
   GtkWidget *loadFileContainer = gtk_box_new(GTK_ORIENTATION_VERTICAL, 30);
   gtk_widget_set_name(loadFileContainer, "loadFileContainer");
   gtk_widget_set_hexpand(algorithmSelectionContainer, TRUE);
@@ -882,6 +899,8 @@ static GtkWidget *CalendarView(GtkWindow *window) {
 
   evData->new_file_loaded.window = window;
   evData->new_file_loaded.spin_button = GTK_SPIN_BUTTON(quantumEntry);
+  evData->new_file_loaded.review_store = reviewStore;
+
   evData->update_sim_canvas.canvas_container = GTK_BOX(processBox);
   evData->update_sim_canvas.step_label = GTK_LABEL(tickLabel);
   evData->update_sim_canvas.info_store = processStore;

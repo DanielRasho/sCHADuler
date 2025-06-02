@@ -966,7 +966,7 @@ int main(int argc, char **argv) {
       .data_capacity = 0,
   };
 
-  SC_Arena_Init(&SYNC_SIM_STATE,
+  SC_Arena_Init(&SYNC_SIM_ARENA,
                 sizeof(SC_SyncSimulator) +
                     sizeof(SC_SyncProcess) * INITIAL_PROCESSES +
                     sizeof(SC_Action) * INITIAL_ACTIONS +
@@ -1009,7 +1009,7 @@ int main(int argc, char **argv) {
   SC_Arena_Deinit(&PIDS_ARENA);
   SC_Arena_Deinit(&SIM_ARENA);
   SC_Arena_Deinit(&SIM_BTN_LABELS_ARENA);
-  SC_Arena_Deinit(&SYNC_SIM_STATE);
+  SC_Arena_Deinit(&SYNC_SIM_ARENA);
 
   return status;
 }

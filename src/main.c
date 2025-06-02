@@ -68,13 +68,6 @@ typedef struct {
   SC_SyncLoadedNewFileData new_file_loaded;
 } SC_SyncGlobalEventData;
 
-// FIXME: Append to SC_GlobalEventData!
-typedef struct {
-  GtkWindow *window;
-  GtkTextBuffer *buffer;
-  GtkBox *button_container;
-} SC_OpenFileEVData;
-
 // ################################
 // ||                            ||
 // ||      CUSTOM GOBJECTS       ||
@@ -273,23 +266,29 @@ static void update_sim_canvas(SC_UpdateSimCanvasData params, SC_Err err) {
 
 void show_alert_dialog(GtkWidget *parent_widget, const char *title,
                        const char *message) {
-  GtkWidget *parent_window = gtk_widget_get_root(parent_widget);
+  GtkWidget *parent_window = GTK_WIDGET(gtk_widget_get_root(parent_widget));
 
-  GtkWidget *dialog = gtk_dialog_new();
+  // Create a new transient window (acts as a dialog)
+  GtkWidget *dialog = gtk_window_new();
+  gtk_window_set_title(GTK_WINDOW(dialog), title);
   gtk_window_set_modal(GTK_WINDOW(dialog), TRUE);
   gtk_window_set_transient_for(GTK_WINDOW(dialog), GTK_WINDOW(parent_window));
-  gtk_window_set_title(GTK_WINDOW(dialog), title);
+  gtk_window_set_default_size(GTK_WINDOW(dialog), 300, -1);
   gtk_widget_add_css_class(dialog, "alert_popup");
 
-  GtkWidget *content_area = gtk_dialog_get_content_area(GTK_DIALOG(dialog));
+  // Container for dialog content
+  GtkWidget *content_box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 10);
+  gtk_window_set_child(GTK_WINDOW(dialog), content_box);
 
+  // Message label
   GtkWidget *label = gtk_label_new(message);
-  gtk_box_append(GTK_BOX(content_area), label);
+  gtk_label_set_wrap(GTK_LABEL(label), TRUE);
+  gtk_box_append(GTK_BOX(content_box), label);
 
+  // Close button
   GtkWidget *close_button = gtk_button_new_with_label("Close");
-  g_signal_connect_swapped(close_button, "clicked",
-                           G_CALLBACK(gtk_window_destroy), dialog);
-  gtk_box_append(GTK_BOX(content_area), close_button);
+  g_signal_connect_swapped(close_button, "clicked", G_CALLBACK(gtk_window_destroy), dialog);
+  gtk_box_append(GTK_BOX(content_box), close_button);
   gtk_widget_add_css_class(close_button, "alert_popup_btn");
 
   gtk_window_present(GTK_WINDOW(dialog));

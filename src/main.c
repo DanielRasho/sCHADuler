@@ -37,6 +37,19 @@ typedef struct {
   SC_UpdateSimCanvasData update_sim_canvas;
 } SC_GlobalEventData;
 
+// Syncronization
+
+typedef struct {
+  GtkWindow *window;
+  GtkTextBuffer *processes_buffer;
+  GtkTextBuffer *resources_buffer;
+  GtkTextBuffer *actions_buffer;
+} SC_SyncLoadedNewFileData;
+
+typedef struct {
+  SC_SyncLoadedNewFileData new_file_loaded;
+} SC_SyncGlobalEventData;
+
 // FIXME: Append to SC_GlobalEventData!
 typedef struct {
   GtkWindow *window;
@@ -121,9 +134,19 @@ static SC_StringList PID_LIST;
 static SC_Simulation *SIM_STATE;
 static struct SC_Arena SIM_BTN_LABELS_ARENA;
 
+// Syncronization
+
+static struct SC_Arena SYNC_SIM_ARENA;
+
 static SC_StringList SYNC_PROCESS_NAMES;
 static SC_StringList SYNC_RESOURCES_NAMES;
 static SC_StringList SYNC_ACTIONS_NAMES;
+
+static SC_String PROCESS_FILE_CONTENT;
+static SC_String RESOURCES_FILE_CONTENT;
+static SC_String ACTIONS_FILE_CONTENT;
+
+static SC_SyncSimulator *SYNC_SIM_STATE;
 
 // ################################
 // ||                            ||
@@ -418,6 +441,98 @@ static void handle_reset_click(GtkWidget *widget, gpointer data) {
     }
   }
 }
+
+// Syncronization
+
+static void sync_file_dialog_finished(GObject *source_object, GAsyncResult *res,
+                                      gpointer data, SC_String *file_contents,
+                                      GtkTextBuffer *buffer) {
+  SC_SyncGlobalEventData *global_ev_data = (SC_SyncGlobalEventData *)data;
+  SC_SyncLoadedNewFileData ev_data = global_ev_data->new_file_loaded;
+
+  GError **error = NULL;
+  GFile *file =
+      gtk_file_dialog_open_finish(GTK_FILE_DIALOG(source_object), res, error);
+  if (NULL != error) {
+    SC_PANIC("An error occurred reading the file: `%s`!\n", (*error)->message);
+    return;
+  }
+
+  if (NULL == file) {
+    fprintf(stderr, "No file selected!\n");
+    return;
+  }
+
+  const char *file_path = g_file_get_path(file);
+  fprintf(stderr, "Loading file at: %s\n", file_path);
+
+  char *contents;
+  gsize length;
+  if (!g_file_load_contents(file, NULL, &contents, &length, NULL, error)) {
+    fprintf(stderr, "Failed to read file contents: `%s`!\n", (*error)->message);
+    return;
+  }
+
+  // Free old data
+  if (file_contents->data != NULL) {
+    free(file_contents->data);
+  }
+
+  // Set New contents
+  file_contents->length = length;
+  file_contents->data = contents;
+  file_contents->data_capacity = length;
+
+  fprintf(stderr, "The file contents are:\n%*s\n", (int)file_contents->length,
+          file_contents->data);
+
+  gtk_text_buffer_set_text(buffer, contents, length);
+}
+
+static void sync_handle_open_file_click(GtkWidget *widget, gpointer data,
+                                        GAsyncReadyCallback callback) {
+  SC_SyncGlobalEventData *ev_data = (SC_SyncGlobalEventData *)data;
+  GtkFileDialog *dialog = gtk_file_dialog_new();
+  gtk_file_dialog_set_title(dialog, "Archivo de simulacion");
+  gtk_file_dialog_set_modal(dialog, TRUE);
+  gtk_file_dialog_open(dialog, ev_data->new_file_loaded.window, NULL, callback,
+                       data);
+}
+
+static void sync_handle_finish_load_process(GObject *source_object,
+                                            GAsyncResult *res, gpointer data) {
+  SC_SyncGlobalEventData *ev_data = (SC_SyncGlobalEventData *)data;
+  sync_file_dialog_finished(source_object, res, data, &PROCESS_FILE_CONTENT,
+                            ev_data->new_file_loaded.processes_buffer);
+}
+
+static void sync_handle_load_process(GtkWidget *widget, gpointer data) {
+  sync_handle_open_file_click(widget, data, sync_handle_finish_load_process);
+}
+
+static void sync_handle_finish_load_resources(GObject *source_object,
+                                              GAsyncResult *res,
+                                              gpointer data) {
+  SC_SyncGlobalEventData *ev_data = (SC_SyncGlobalEventData *)data;
+  sync_file_dialog_finished(source_object, res, data, &RESOURCES_FILE_CONTENT,
+                            ev_data->new_file_loaded.resources_buffer);
+}
+
+static void sync_handle_load_resources(GtkWidget *widget, gpointer data) {
+  sync_handle_open_file_click(widget, data, sync_handle_finish_load_resources);
+}
+
+static void sync_handle_finish_load_actions(GObject *source_object,
+                                            GAsyncResult *res, gpointer data) {
+  SC_SyncGlobalEventData *ev_data = (SC_SyncGlobalEventData *)data;
+  sync_file_dialog_finished(source_object, res, data, &ACTIONS_FILE_CONTENT,
+                            ev_data->new_file_loaded.actions_buffer);
+}
+
+static void sync_handle_load_actions(GtkWidget *widget, gpointer data) {
+  sync_handle_open_file_click(widget, data, sync_handle_finish_load_actions);
+}
+
 // ################################
 // ||                            ||
 // ||         UI BLOCKS          ||
@@ -648,21 +763,23 @@ static GtkWidget *SyncView(GtkWindow *window) {
   gtk_widget_set_hexpand(sidebar, FALSE);
   gtk_widget_set_vexpand(sidebar, TRUE);
 
-  // === LOAD PROCESSES ===
-  GtkTextBuffer *process_buffer = gtk_text_buffer_new(NULL);
-  gtk_text_buffer_set_text(process_buffer, "NO FILE LOADED!", -1);
+  // === ALLOCATE EVENT ===
 
-  SC_OpenFileEVData *evData = malloc(sizeof(SC_OpenFileEVData));
+  SC_SyncGlobalEventData *evData = malloc(sizeof(SC_SyncGlobalEventData));
   if (NULL == evData) {
     SC_PANIC("Failed to malloc enough space for the file loader event!\n");
     return NULL;
   }
 
-  evData->window = window;
-  evData->buffer = GTK_TEXT_BUFFER(process_buffer);
-  evData->button_container = GTK_BOX(sidebar);
+  // === LOAD PROCESSES ===
+  GtkTextBuffer *process_buffer = gtk_text_buffer_new(NULL);
+  gtk_text_buffer_set_text(process_buffer, "NO FILE LOADED!", -1);
+
+  evData->new_file_loaded.window = window;
+  evData->new_file_loaded.processes_buffer = GTK_TEXT_BUFFER(process_buffer);
+
   GtkWidget *load_process_btn =
-      MainButton("Load processes", handle_open_file_click, evData);
+      MainButton("Load processes", sync_handle_load_process, evData);
   gtk_box_append(GTK_BOX(sidebar), load_process_btn);
 
   GtkWidget *process_text_view = gtk_text_view_new_with_buffer(process_buffer);
@@ -680,17 +797,10 @@ static GtkWidget *SyncView(GtkWindow *window) {
   GtkTextBuffer *resources_buffer = gtk_text_buffer_new(NULL);
   gtk_text_buffer_set_text(resources_buffer, "NO FILE LOADED!", -1);
 
-  SC_OpenFileEVData *resources_ev_data = malloc(sizeof(SC_OpenFileEVData));
-  if (!resources_ev_data) {
-    SC_PANIC("malloc failed");
-    return NULL;
-  }
-  resources_ev_data->window = window;
-  resources_ev_data->buffer = resources_buffer;
-  resources_ev_data->button_container = GTK_BOX(sidebar);
+  evData->new_file_loaded.resources_buffer = GTK_TEXT_BUFFER(resources_buffer);
 
   GtkWidget *load_resources_btn =
-      MainButton("Load resources", handle_open_file_click, resources_ev_data);
+      MainButton("Load resources", sync_handle_load_resources, evData);
   gtk_box_append(GTK_BOX(sidebar), load_resources_btn);
 
   GtkWidget *resources_text_view =
@@ -709,17 +819,10 @@ static GtkWidget *SyncView(GtkWindow *window) {
   GtkTextBuffer *actions_buffer = gtk_text_buffer_new(NULL);
   gtk_text_buffer_set_text(actions_buffer, "NO FILE LOADED!", -1);
 
-  SC_OpenFileEVData *actions_ev_data = malloc(sizeof(SC_OpenFileEVData));
-  if (!actions_ev_data) {
-    SC_PANIC("malloc failed");
-    return NULL;
-  }
-  actions_ev_data->window = window;
-  actions_ev_data->buffer = actions_buffer;
-  actions_ev_data->button_container = GTK_BOX(sidebar);
+  evData->new_file_loaded.actions_buffer = GTK_TEXT_BUFFER(actions_buffer);
 
   GtkWidget *load_actions_btn =
-      MainButton("Load actions", handle_open_file_click, actions_ev_data);
+      MainButton("Load actions", sync_handle_load_actions, evData);
   gtk_box_append(GTK_BOX(sidebar), load_actions_btn);
 
   GtkWidget *actions_text_view = gtk_text_view_new_with_buffer(actions_buffer);
@@ -838,6 +941,23 @@ int main(int argc, char **argv) {
     SC_Arena_Deinit(&SIM_ARENA);
     return 1;
   }
+
+  // Syncronization
+  static SC_String PROCESS_FILE_CONTENT = {
+      .length = 0,
+      .data = NULL,
+      .data_capacity = 0,
+  };
+  static SC_String RESOURCES_FILE_CONTENT = {
+      .length = 0,
+      .data = NULL,
+      .data_capacity = 0,
+  };
+  static SC_String ACTIONS_FILE_CONTENT = {
+      .length = 0,
+      .data = NULL,
+      .data_capacity = 0,
+  };
 
   gtk_init();
 

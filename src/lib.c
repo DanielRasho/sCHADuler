@@ -567,6 +567,7 @@ typedef struct {
 typedef struct {
   size_t step_length;
   size_t current_step;
+  float avg_waiting_time;
   SC_SimStepState *steps;
 } SC_Simulation;
 

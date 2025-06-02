@@ -271,6 +271,30 @@ static void update_sim_canvas(SC_UpdateSimCanvasData params, SC_Err err) {
   }
 }
 
+void show_alert_dialog(GtkWidget *parent_widget, const char *title,
+                       const char *message) {
+  GtkWidget *parent_window = gtk_widget_get_root(parent_widget);
+
+  GtkWidget *dialog = gtk_dialog_new();
+  gtk_window_set_modal(GTK_WINDOW(dialog), TRUE);
+  gtk_window_set_transient_for(GTK_WINDOW(dialog), GTK_WINDOW(parent_window));
+  gtk_window_set_title(GTK_WINDOW(dialog), title);
+  gtk_widget_add_css_class(dialog, "alert_popup");
+
+  GtkWidget *content_area = gtk_dialog_get_content_area(GTK_DIALOG(dialog));
+
+  GtkWidget *label = gtk_label_new(message);
+  gtk_box_append(GTK_BOX(content_area), label);
+
+  GtkWidget *close_button = gtk_button_new_with_label("Close");
+  g_signal_connect_swapped(close_button, "clicked",
+                           G_CALLBACK(gtk_window_destroy), dialog);
+  gtk_box_append(GTK_BOX(content_area), close_button);
+  gtk_widget_add_css_class(close_button, "alert_popup_btn");
+
+  gtk_window_present(GTK_WINDOW(dialog));
+}
+
 // ################################
 // ||                            ||
 // ||      COLUMN BUILDERS       ||
@@ -708,6 +732,23 @@ static void sync_handle_load_actions(GtkWidget *widget, gpointer data) {
   sync_handle_open_file_click(widget, data, sync_handle_finish_load_actions);
 }
 
+static void load_sync_files(GtkWidget *widget, gpointer data) {
+
+  if (PROCESS_FILE_CONTENT.length == 0 || RESOURCES_FILE_CONTENT.length == 0 ||
+      ACTIONS_FILE_CONTENT.length == 0) {
+    // Create and show an alert dialog
+    show_alert_dialog(widget, "Missing Files",
+                      "One or more required files are missing.");
+    return;
+  }
+
+  // TODO: FREE TIMELINES STEP DATA
+  SC_Arena_Reset(&SYNC_SIM_STATE);
+  SC_StringList_Reset(&SYNC_PROCESS_NAMES);
+  SC_StringList_Reset(&SYNC_RESOURCES_NAMES);
+  SC_StringList_Reset(&SYNC_ACTIONS_NAMES);
+}
+
 // ################################
 // ||                            ||
 // ||         UI BLOCKS          ||
@@ -1070,6 +1111,7 @@ static GtkWidget *SyncView(GtkWindow *window) {
   // "Load" Button (left)
   GtkWidget *load_button = gtk_button_new_with_label("Load Data");
   gtk_box_append(GTK_BOX(topbar), load_button);
+  g_signal_connect(load_button, "clicked", G_CALLBACK(load_sync_files), NULL);
 
   // === SIMULATION ===
   GtkWidget *simulation = gtk_box_new(GTK_ORIENTATION_VERTICAL, 5);

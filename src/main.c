@@ -72,7 +72,7 @@ typedef struct {
 // ||                            ||
 // ################################
 
-#define CAPITAL_TYPE_ITEM (sc_process_gio_get_type())
+#define SC_TYPE_PROCESS_GIO (sc_process_gio_get_type())
 G_DECLARE_FINAL_TYPE(SCProcessGio, sc_process_gio, SC, PROCESS_GIO, GObject)
 
 struct _SCProcessGio {
@@ -93,7 +93,7 @@ G_DEFINE_TYPE(SCProcessGio, sc_process_gio, G_TYPE_OBJECT)
 
 static SCProcessGio *sc_process_gio_new(size_t pid_idx, uint burst_time,
                                         uint arrival_time, uint priority) {
-  SCProcessGio *item = g_object_new(sc_process_gio_get_type(), NULL);
+  SCProcessGio *item = g_object_new(SC_TYPE_PROCESS_GIO, NULL);
   item->pid_idx = pid_idx;
   item->burst_time = burst_time;
   item->arrival_time = arrival_time;
@@ -113,6 +113,44 @@ static uint sc_process_gio_get_arrival_time(SCProcessGio *self) {
 }
 static uint sc_process_gio_get_priority(SCProcessGio *self) {
   return self->priority;
+}
+
+#define SC_TYPE_ALGORITHM_PERFORMANCE (sc_algorithm_performance_get_type())
+G_DECLARE_FINAL_TYPE(SCAlgorithmPerformance, sc_algorithm_performance, SC,
+                     ALGORITHM_PERFORMANCE, GObject)
+
+struct _SCAlgorithmPerformance {
+  GObject parent_instance;
+  const char *name;
+  float avg_waiting_time;
+};
+static void sc_algorithm_performance_init(SCAlgorithmPerformance *item) {}
+
+struct _SCAlgorithmPerformanceClass {
+  GObjectClass parent_class;
+};
+static void
+sc_algorithm_performance_class_init(SCAlgorithmPerformanceClass *class) {}
+
+G_DEFINE_TYPE(SCAlgorithmPerformance, sc_algorithm_performance, G_TYPE_OBJECT)
+
+static SCAlgorithmPerformance *
+sc_algorithm_performance_new(const char *name, float avg_waiting_time) {
+  SCAlgorithmPerformance *item =
+      g_object_new(SC_TYPE_ALGORITHM_PERFORMANCE, NULL);
+  item->name = name;
+  item->avg_waiting_time = avg_waiting_time;
+
+  return item;
+}
+
+static const char *
+sc_algorithm_performance_get_name(SCAlgorithmPerformance *self) {
+  return self->name;
+}
+static float
+sc_algorithm_performance_get_avg_waiting_time(SCAlgorithmPerformance *self) {
+  return self->avg_waiting_time;
 }
 
 // ################################
@@ -285,6 +323,28 @@ static void bind_priority_cb(GtkSignalListItemFactory *factory,
 
   char buff[10] = {0};
   sprintf(buff, "%d", priority);
+  gtk_label_set_text(GTK_LABEL(label), buff);
+}
+
+static void bind_algorithm_name_cb(GtkSignalListItemFactory *factory,
+                                   GtkListItem *listitem) {
+  GtkWidget *label = gtk_list_item_get_child(listitem);
+  GObject *item = gtk_list_item_get_item(GTK_LIST_ITEM(listitem));
+  const char *name =
+      sc_algorithm_performance_get_name(SC_ALGORITHM_PERFORMANCE(item));
+
+  gtk_label_set_text(GTK_LABEL(label), name);
+}
+
+static void bind_avg_waiting_time_cb(GtkSignalListItemFactory *factory,
+                                     GtkListItem *listitem) {
+  GtkWidget *label = gtk_list_item_get_child(listitem);
+  GObject *item = gtk_list_item_get_item(GTK_LIST_ITEM(listitem));
+  float waiting_time = sc_algorithm_performance_get_avg_waiting_time(
+      SC_ALGORITHM_PERFORMANCE(item));
+
+  char buff[10] = {0};
+  sprintf(buff, "%.2f", waiting_time);
   gtk_label_set_text(GTK_LABEL(label), buff);
 }
 
@@ -785,8 +845,31 @@ static GtkWidget *CalendarView(GtkWindow *window) {
     }
   }
 
-  GtkWidget *avgLabel = gtk_label_new("AVG: 0");
-  gtk_box_append(GTK_BOX(algorithmSelectionContainer), avgLabel);
+  GListStore *reviewStore = g_list_store_new(G_TYPE_OBJECT);
+  g_list_store_append(reviewStore, sc_algorithm_performance_new("TEST", 5.0));
+  GtkNoSelection *reviewStoreSelectionModel =
+      gtk_no_selection_new(G_LIST_MODEL(reviewStore));
+  GtkWidget *reviewTable =
+      gtk_column_view_new(GTK_SELECTION_MODEL(reviewStoreSelectionModel));
+  gtk_box_append(GTK_BOX(algorithmSelectionContainer), reviewTable);
+  gtk_column_view_set_show_row_separators(GTK_COLUMN_VIEW(reviewTable), TRUE);
+
+  // Name column setup
+  factory = gtk_signal_list_item_factory_new();
+  g_signal_connect(factory, "setup", G_CALLBACK(setup_label_cb), NULL);
+  g_signal_connect(factory, "bind", G_CALLBACK(bind_algorithm_name_cb), NULL);
+  col = gtk_column_view_column_new("Algorithm Name", factory);
+  gtk_column_view_append_column(GTK_COLUMN_VIEW(reviewTable), col);
+
+  // AVG Waiting time setup
+  factory = gtk_signal_list_item_factory_new();
+  g_signal_connect(factory, "setup", G_CALLBACK(setup_label_cb), NULL);
+  g_signal_connect(factory, "bind", G_CALLBACK(bind_avg_waiting_time_cb), NULL);
+  col = gtk_column_view_column_new("AVG Waiting Time", factory);
+  gtk_column_view_append_column(GTK_COLUMN_VIEW(reviewTable), col);
+
+  // GtkWidget *avgLabel = gtk_label_new("AVG: 0");
+  // gtk_box_append(GTK_BOX(algorithmSelectionContainer), avgLabel);
 
   GtkWidget *loadFileContainer = gtk_box_new(GTK_ORIENTATION_VERTICAL, 30);
   gtk_widget_set_name(loadFileContainer, "loadFileContainer");

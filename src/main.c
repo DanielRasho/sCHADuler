@@ -54,6 +54,8 @@ typedef struct {
   GtkTextBuffer *processes_buffer;
   GtkTextBuffer *resources_buffer;
   GtkTextBuffer *actions_buffer;
+  GtkSpinButton *semaphore_quantity;
+  GtkWidget *syncronization_switch;
 } SC_SyncLoadedNewFileData;
 
 typedef struct {
@@ -1011,20 +1013,68 @@ static GtkWidget *SyncView(GtkWindow *window) {
                                 actions_text_view);
   gtk_box_append(GTK_BOX(sidebar), actions_scroll);
 
-  // === MAIN CONTENT ===
-  GtkWidget *main_box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 5);
-  gtk_widget_set_halign(main_box, GTK_ALIGN_CENTER);
-  gtk_widget_set_valign(main_box, GTK_ALIGN_CENTER);
+  // === TOPBAR ===
+  GtkWidget *topbar = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 10);
+  gtk_widget_set_halign(topbar, GTK_ALIGN_FILL);
+  gtk_widget_set_valign(topbar, GTK_ALIGN_START);
+  gtk_widget_add_css_class(topbar, "top_bar");
+
+  // Right-side widgets
+  GtkWidget *mutex_label = gtk_label_new("Mutex");
+  gtk_box_append(GTK_BOX(topbar), mutex_label);
+
+  GtkWidget *switch_widget = gtk_switch_new();
+  gtk_box_append(GTK_BOX(topbar), switch_widget);
+  evData->new_file_loaded.syncronization_switch = switch_widget;
+
+  GtkWidget *semaphore_label = gtk_label_new("Semaphore");
+  gtk_box_append(GTK_BOX(topbar), semaphore_label);
+
+  // === Add number input (spin button) ===
+  // initial=1, min=0, max=100, step=1
+  GtkAdjustment *adjustment = gtk_adjustment_new(1, 1, 100, 1, 10, 0);
+  // step=1, digits=0
+  GtkWidget *spin_button = gtk_spin_button_new(adjustment, 1, 0);
+  gtk_box_append(GTK_BOX(topbar), spin_button);
+  evData->new_file_loaded.semaphore_quantity = spin_button;
+
+  // === Spacer to push next widgets to the right ===
+  GtkWidget *spacer = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
+  gtk_widget_set_hexpand(spacer, TRUE);
+  gtk_widget_set_vexpand(spacer, FALSE);
+  gtk_box_append(GTK_BOX(topbar), spacer);
+
+  // "Load" Button (left)
+  GtkWidget *load_button = gtk_button_new_with_label("Load Data");
+  gtk_box_append(GTK_BOX(topbar), load_button);
+
+  // === SIMULATION ===
+  GtkWidget *simulation = gtk_box_new(GTK_ORIENTATION_VERTICAL, 5);
+  gtk_widget_set_halign(simulation, GTK_ALIGN_FILL);
+  gtk_widget_set_valign(simulation, GTK_ALIGN_CENTER);
+  gtk_widget_set_hexpand(simulation, TRUE);
+  gtk_widget_set_vexpand(simulation, TRUE);
+  gtk_widget_add_css_class(
+      simulation, "simulation"); // was incorrectly added to `topbar` earlier
 
   GtkWidget *main_label = gtk_label_new("Main Content");
-
   GtkWidget *exit_button = gtk_button_new_with_label("Goodbye world!");
   g_signal_connect(exit_button, "clicked", G_CALLBACK(print_hello), NULL);
-  g_signal_connect_swapped(exit_button, "clicked",
-                           G_CALLBACK(gtk_window_destroy), window);
 
-  gtk_box_append(GTK_BOX(main_box), main_label);
-  gtk_box_append(GTK_BOX(main_box), exit_button);
+  gtk_box_append(GTK_BOX(simulation), main_label);
+  gtk_box_append(GTK_BOX(simulation), exit_button);
+
+  // === MAIN CONTENT ===
+  GtkWidget *main_box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 5);
+  gtk_widget_set_halign(main_box, GTK_ALIGN_FILL);
+  gtk_widget_set_valign(main_box, GTK_ALIGN_FILL);
+  gtk_widget_set_hexpand(main_box, TRUE);
+  gtk_widget_set_vexpand(main_box, TRUE);
+  gtk_widget_add_css_class(main_box, "main_content");
+
+  // Insert topbar at the top of the vertical box
+  gtk_box_append(GTK_BOX(main_box), topbar);
+  gtk_box_append(GTK_BOX(main_box), simulation);
 
   // === SPLIT VIEW ===
   GtkWidget *paned = gtk_paned_new(GTK_ORIENTATION_HORIZONTAL);

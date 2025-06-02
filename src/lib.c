@@ -635,6 +635,13 @@ void simulate_first_in_first_out(SC_ProcessList *processes,
   // }
 }
 
+void simulate_shortest_first(SC_ProcessList *processes, SC_Simulation *sim) {}
+void simulate_shortest_remaining(SC_ProcessList *processes,
+                                 SC_Simulation *sim) {}
+void simulate_round_robin(SC_ProcessList *processes, SC_Simulation *sim,
+                          int quantum) {}
+void simulate_priority(SC_ProcessList *processes, SC_Simulation *sim) {}
+
 void parse_scheduling_file(SC_String *file_contents,
                            struct SC_Arena *pids_arena,
                            struct SC_Arena *processes_arena,

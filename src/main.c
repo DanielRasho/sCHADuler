@@ -17,6 +17,13 @@ const static size_t INITIAL_PROCESSES = 15;
 const static size_t INITIAL_RESOURCES = 5;
 const static size_t INITIAL_ACTIONS = 15;
 
+typedef int SC_Algorithm;
+const static SC_Algorithm SC_FirstInFirstOut = 0;
+const static SC_Algorithm SC_ShortestFirst = 1;
+const static SC_Algorithm SC_ShortestRemaining = 2;
+const static SC_Algorithm SC_RoundRobin = 3;
+const static SC_Algorithm SC_Priority = 4;
+
 // ################################
 // ||                            ||
 // ||          STRUCTS           ||
@@ -58,13 +65,6 @@ typedef struct {
   GtkTextBuffer *buffer;
   GtkBox *button_container;
 } SC_OpenFileEVData;
-
-typedef int SC_Algorithm;
-static SC_Algorithm SC_FirstInFirstOut = 1;
-static SC_Algorithm SC_ShortestFirst = 2;
-static SC_Algorithm SC_ShortestRemaining = 3;
-static SC_Algorithm SC_RoundRobin = 4;
-static SC_Algorithm SC_Priority = 5;
 
 // ################################
 // ||                            ||
@@ -133,7 +133,8 @@ static SC_ProcessList PROCESS_LIST;
 static struct SC_Arena PIDS_ARENA;
 static SC_StringList PID_LIST;
 
-static SC_Simulation *SIM_STATE;
+static SC_Simulation *SIM_STATES[5] = {0};
+// static SC_Simulation *SIM_STATE;
 static struct SC_Arena SIM_BTN_LABELS_ARENA;
 
 // Syncronization
@@ -164,15 +165,21 @@ static void update_sim_canvas(SC_UpdateSimCanvasData params, SC_Err err) {
     gtk_box_remove(params.canvas_container, widget);
   }
 
+  SC_Simulation *current_sim = SIM_STATES[SELECTED_ALGORITHM];
+  if (current_sim == NULL) {
+    fprintf(stderr, "ERROR: Simulation has not been initialized!\n");
+    return;
+  }
+
   char str[] = {'C', 'u', 'r', 'r', 'e', 'n', 't', ' ', 'S', 't',
                 'e', 'p', ':', ' ', 0,   0,   0,   0,   0};
-  sprintf(str + strlen(str), "%zu", SIM_STATE->current_step);
+  sprintf(str + strlen(str), "%zu", current_sim->current_step);
   gtk_label_set_label(params.step_label, str);
 
   SC_Arena_Reset(&SIM_BTN_LABELS_ARENA);
-  for (int i = 0; i <= SIM_STATE->current_step; i++) {
-    size_t current_process = SIM_STATE->steps[i].current_process;
-    size_t pid_idx = SIM_STATE->steps[i].processes[current_process].pid_idx;
+  for (int i = 0; i <= current_sim->current_step; i++) {
+    size_t current_process = current_sim->steps[i].current_process;
+    size_t pid_idx = current_sim->steps[i].processes[current_process].pid_idx;
     SC_String pid_str = SC_StringList_GetAt(&PID_LIST, pid_idx, err);
     if (*err != NO_ERROR) {
       fprintf(stderr,
@@ -190,11 +197,11 @@ static void update_sim_canvas(SC_UpdateSimCanvasData params, SC_Err err) {
     gtk_widget_add_css_class(label, css_class);
     gtk_widget_add_css_class(label, "pid_box");
 
-    SC_Bool is_last_iteration = i == SIM_STATE->current_step;
+    SC_Bool is_last_iteration = i == current_sim->current_step;
     if (is_last_iteration) {
       g_list_store_remove_all(params.info_store);
-      for (int j = 0; j < SIM_STATE->steps[i].process_length; j++) {
-        SC_Process current = SIM_STATE->steps[i].processes[j];
+      for (int j = 0; j < current_sim->steps[i].process_length; j++) {
+        SC_Process current = current_sim->steps[i].processes[j];
         fprintf(stderr, "INFO: Appending value to store\n");
         g_list_store_append(
             params.info_store,
@@ -291,10 +298,43 @@ static void print_hello(GtkWidget *widget, gpointer data) {
   g_print("Hello World\n");
 }
 
-static void change_selected_algorithm(GtkCheckButton *self, gpointer *data) {
-  SC_Algorithm algo = *(SC_Algorithm *)data;
-  SELECTED_ALGORITHM = algo;
-  fprintf(stderr, "Changing selected algorithm to: %d\n", SELECTED_ALGORITHM);
+static void change_algorithm_to_first_in_first_out(GtkCheckButton *self,
+                                                   gpointer *data) {
+  size_t err = NO_ERROR;
+  SC_GlobalEventData *ev_data = (SC_GlobalEventData *)data;
+  SELECTED_ALGORITHM = SC_FirstInFirstOut;
+  update_sim_canvas(ev_data->update_sim_canvas, &err);
+}
+
+static void change_algorithm_to_shortest_first(GtkCheckButton *self,
+                                               gpointer *data) {
+  size_t err = NO_ERROR;
+  SC_GlobalEventData *ev_data = (SC_GlobalEventData *)data;
+  SELECTED_ALGORITHM = SC_ShortestFirst;
+  update_sim_canvas(ev_data->update_sim_canvas, &err);
+}
+
+static void change_algorithm_to_shortest_remaining(GtkCheckButton *self,
+                                                   gpointer *data) {
+  size_t err = NO_ERROR;
+  SC_GlobalEventData *ev_data = (SC_GlobalEventData *)data;
+  SELECTED_ALGORITHM = SC_ShortestRemaining;
+  update_sim_canvas(ev_data->update_sim_canvas, &err);
+}
+
+static void change_algorithm_to_round_robin(GtkCheckButton *self,
+                                            gpointer *data) {
+  size_t err = NO_ERROR;
+  SC_GlobalEventData *ev_data = (SC_GlobalEventData *)data;
+  SELECTED_ALGORITHM = SC_RoundRobin;
+  update_sim_canvas(ev_data->update_sim_canvas, &err);
+}
+
+static void change_algorithm_to_priority(GtkCheckButton *self, gpointer *data) {
+  size_t err = NO_ERROR;
+  SC_GlobalEventData *ev_data = (SC_GlobalEventData *)data;
+  SELECTED_ALGORITHM = SC_Priority;
+  update_sim_canvas(ev_data->update_sim_canvas, &err);
 }
 
 static void file_dialog_finished(GObject *source_object, GAsyncResult *res,
@@ -355,40 +395,56 @@ static void file_dialog_finished(GObject *source_object, GAsyncResult *res,
     current = current->next;
   }
 
+  int quantum = gtk_spin_button_get_value_as_int(ev_data.spin_button);
   SC_Arena_Reset(&SIM_ARENA);
-  SIM_STATE = SC_Arena_Alloc(&SIM_ARENA, sizeof(SC_Simulation), &err);
-  if (err != NO_ERROR) {
-    fprintf(stderr, "ERROR: %s\n", SC_Err_ToString(&err));
-    exit(1);
-  }
-
-  SIM_STATE->steps =
-      SC_Arena_Alloc(&SIM_ARENA, sizeof(SC_SimStepState) * total_steps, &err);
-  if (err != NO_ERROR) {
-    fprintf(stderr, "ERROR: %s\n", SC_Err_ToString(&err));
-    exit(1);
-  }
-
-  for (size_t i = 0; i < total_steps; i++) {
-    SIM_STATE->steps[i].processes =
-        SC_Arena_Alloc(&SIM_ARENA, sizeof(SC_Process) * total_processes, &err);
+  for (int i = 0; i < SC_Priority; i++) {
+    SIM_STATES[i] = SC_Arena_Alloc(&SIM_ARENA, sizeof(SC_Simulation), &err);
     if (err != NO_ERROR) {
       fprintf(stderr, "ERROR: %s\n", SC_Err_ToString(&err));
       exit(1);
     }
-    SIM_STATE->steps[i].process_length = total_processes;
-  }
-  SIM_STATE->step_length = total_steps;
 
-  // TODO: Use the quantum variable depending on the algorithm...
-  int quantum = gtk_spin_button_get_value_as_int(ev_data.spin_button);
-  if (SELECTED_ALGORITHM == SC_FirstInFirstOut) {
-    simulate_first_in_first_out(&PROCESS_LIST, SIM_STATE);
-  }
-  // TODO: Add another algorithms...
+    SIM_STATES[i]->steps =
+        SC_Arena_Alloc(&SIM_ARENA, sizeof(SC_SimStepState) * total_steps, &err);
+    if (err != NO_ERROR) {
+      fprintf(stderr, "ERROR: %s\n", SC_Err_ToString(&err));
+      exit(1);
+    }
 
-  // FIXME: The current step should be 0
-  SIM_STATE->current_step = 0;
+    for (size_t j = 0; j < total_steps; j++) {
+      SIM_STATES[i]->steps[j].processes = SC_Arena_Alloc(
+          &SIM_ARENA, sizeof(SC_Process) * total_processes, &err);
+      if (err != NO_ERROR) {
+        fprintf(stderr, "ERROR: %s\n", SC_Err_ToString(&err));
+        exit(1);
+      }
+      SIM_STATES[i]->steps[j].process_length = total_processes;
+    }
+    SIM_STATES[i]->step_length = total_steps;
+
+    switch (i) {
+    case SC_FirstInFirstOut: {
+      simulate_first_in_first_out(&PROCESS_LIST, SIM_STATES[i]);
+    } break;
+    case SC_ShortestFirst: {
+      simulate_shortest_first(&PROCESS_LIST, SIM_STATES[i]);
+    } break;
+    case SC_ShortestRemaining: {
+      simulate_shortest_remaining(&PROCESS_LIST, SIM_STATES[i]);
+    } break;
+    case SC_RoundRobin: {
+      simulate_round_robin(&PROCESS_LIST, SIM_STATES[i], quantum);
+    } break;
+    case SC_Priority: {
+      simulate_priority(&PROCESS_LIST, SIM_STATES[i]);
+    } break;
+    default: {
+      SC_PANIC("FATAL: Unrecognized scheduling algorithm (%d)!", i);
+    } break;
+    }
+
+    SIM_STATES[i]->current_step = 0;
+  }
 
   update_sim_canvas(global_ev_data->update_sim_canvas, &err);
   if (err != NO_ERROR) {
@@ -407,9 +463,17 @@ static void handle_open_file_click(GtkWidget *widget, gpointer data) {
 
 static void handle_next_click(GtkWidget *widget, gpointer data) {
   SC_GlobalEventData *ev_data = (SC_GlobalEventData *)data;
-  SC_Bool has_next_step = SIM_STATE->current_step + 1 < SIM_STATE->step_length;
+
+  SC_Simulation *current_sim = SIM_STATES[SELECTED_ALGORITHM];
+  if (current_sim == NULL) {
+    fprintf(stderr, "ERROR: Simulation has not been initialized!\n");
+    return;
+  }
+
+  SC_Bool has_next_step =
+      current_sim->current_step + 1 < current_sim->step_length;
   if (has_next_step) {
-    SIM_STATE->current_step += 1;
+    current_sim->current_step += 1;
     size_t err = NO_ERROR;
     update_sim_canvas(ev_data->update_sim_canvas, &err);
     if (err != NO_ERROR) {
@@ -420,9 +484,9 @@ static void handle_next_click(GtkWidget *widget, gpointer data) {
 
 static void handle_previous_click(GtkWidget *widget, gpointer data) {
   SC_GlobalEventData *ev_data = (SC_GlobalEventData *)data;
-  SC_Bool has_previous_step = SIM_STATE->current_step > 0;
+  SC_Bool has_previous_step = SIM_STATES[SELECTED_ALGORITHM]->current_step > 0;
   if (has_previous_step) {
-    SIM_STATE->current_step -= 1;
+    SIM_STATES[SELECTED_ALGORITHM]->current_step -= 1;
     size_t err = NO_ERROR;
     update_sim_canvas(ev_data->update_sim_canvas, &err);
     if (err != NO_ERROR) {
@@ -433,9 +497,16 @@ static void handle_previous_click(GtkWidget *widget, gpointer data) {
 
 static void handle_reset_click(GtkWidget *widget, gpointer data) {
   SC_GlobalEventData *ev_data = (SC_GlobalEventData *)data;
-  SC_Bool should_reset = SIM_STATE->current_step > 0;
+
+  SC_Simulation *current_sim = SIM_STATES[SELECTED_ALGORITHM];
+  if (current_sim == NULL) {
+    fprintf(stderr, "ERROR: Simulation has not been initialized!\n");
+    return;
+  }
+
+  SC_Bool should_reset = current_sim->current_step > 0;
   if (should_reset) {
-    SIM_STATE->current_step = 0;
+    current_sim->current_step = 0;
     size_t err = NO_ERROR;
     update_sim_canvas(ev_data->update_sim_canvas, &err);
     if (err != NO_ERROR) {
@@ -567,6 +638,12 @@ GtkWidget *MainButton(const char *label,
  * @return GtkWidget* The container of this view.
  */
 static GtkWidget *CalendarView(GtkWindow *window) {
+  SC_GlobalEventData *evData = malloc(sizeof(SC_GlobalEventData));
+  if (NULL == evData) {
+    SC_PANIC("Failed to malloc enough space for the file loader event!\n");
+    return NULL;
+  }
+
   GtkWidget *container = gtk_paned_new(GTK_ORIENTATION_HORIZONTAL);
   gtk_widget_set_vexpand(container, TRUE);
   gtk_widget_set_hexpand(container, TRUE);
@@ -689,23 +766,22 @@ static GtkWidget *CalendarView(GtkWindow *window) {
                                GTK_CHECK_BUTTON(group));
     if (i == 0) {
       g_signal_connect(checkBox, "toggled",
-                       G_CALLBACK(change_selected_algorithm),
-                       &SC_FirstInFirstOut);
+                       G_CALLBACK(change_algorithm_to_first_in_first_out),
+                       evData);
       gtk_check_button_set_active(GTK_CHECK_BUTTON(checkBox), TRUE);
     } else if (i == 1) {
       g_signal_connect(checkBox, "toggled",
-                       G_CALLBACK(change_selected_algorithm),
-                       &SC_ShortestFirst);
+                       G_CALLBACK(change_algorithm_to_shortest_first), evData);
     } else if (i == 2) {
       g_signal_connect(checkBox, "toggled",
-                       G_CALLBACK(change_selected_algorithm),
-                       &SC_ShortestRemaining);
+                       G_CALLBACK(change_algorithm_to_shortest_remaining),
+                       evData);
     } else if (i == 3) {
       g_signal_connect(checkBox, "toggled",
-                       G_CALLBACK(change_selected_algorithm), &SC_RoundRobin);
+                       G_CALLBACK(change_algorithm_to_round_robin), evData);
     } else if (i == 4) {
       g_signal_connect(checkBox, "toggled",
-                       G_CALLBACK(change_selected_algorithm), &SC_Priority);
+                       G_CALLBACK(change_algorithm_to_priority), evData);
     }
   }
 
@@ -720,12 +796,6 @@ static GtkWidget *CalendarView(GtkWindow *window) {
 
   GtkWidget *quantumEntry = gtk_spin_button_new_with_range(0, 1000, 1);
   gtk_widget_set_valign(quantumEntry, GTK_ALIGN_CENTER);
-
-  SC_GlobalEventData *evData = malloc(sizeof(SC_GlobalEventData));
-  if (NULL == evData) {
-    SC_PANIC("Failed to malloc enough space for the file loader event!\n");
-    return NULL;
-  }
 
   evData->new_file_loaded.window = window;
   evData->new_file_loaded.spin_button = GTK_SPIN_BUTTON(quantumEntry);

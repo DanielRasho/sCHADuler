@@ -22,6 +22,12 @@ const static size_t INITIAL_PROCESSES = 15;
 // ################################
 
 typedef struct {
+  GtkWindow *window;
+  GtkTextBuffer *buffer;
+  GtkBox *button_container;
+} SC_OpenFileEVData;
+
+typedef struct {
   GtkBox *canvas_container;
   GtkLabel *step_label;
   GListStore *info_store;

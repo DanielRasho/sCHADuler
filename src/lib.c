@@ -493,6 +493,8 @@ typedef struct {
 void SC_ProcessList_sort(SC_ProcessList *list,
                          int (*cmp)(SC_Process, SC_Process));
 int compare_by_arrival_time(SC_Process a, SC_Process b);
+int compare_by_burst_time(SC_Process a, SC_Process b);
+int compare_by_priority(SC_Process a, SC_Process b);
 int SC_Total_busrt_time(SC_ProcessList *list);
 
 void SC_ProcessList_Init(SC_ProcessList *list) {
@@ -570,18 +572,19 @@ typedef struct {
   SC_SimStepState *steps;
 } SC_Simulation;
 
+void print_simulation(const SC_Simulation *sim);
+
 /**
  * Computes the FIFO scheduling simulation
  *
  * @param processes *SC_ProcessList The initial conditions of each
  * process.
- * @param sim *SC_Simulation The simulation state to fill with all the sim step
- * data.
+ * @param sim *SC_Simulation The simulation state to fill with all the sim
+ * step data.
  * @return SC_Simulation The simulation with all it's steps.
  */
 void simulate_first_in_first_out(SC_ProcessList *processes,
                                  SC_Simulation *sim) {
-  // TODO: Fill with real data and not this dummy data...
   SC_ProcessList_sort(processes, compare_by_arrival_time);
 
   int totalBurstTime = SC_Total_busrt_time(processes);
@@ -614,24 +617,43 @@ void simulate_first_in_first_out(SC_ProcessList *processes,
 
     current = current->next;
   }
+  print_simulation(sim);
+}
 
-  // for (int step_i = 0; step_i < 2; step_i++) {
-  //   sim->steps[step_i].process_length = processes->count;
+void simulate_shortest_job_first(SC_ProcessList *processes,
+                                 SC_Simulation *sim) {
+  SC_ProcessList_sort(processes, compare_by_burst_time);
 
-  //   int j = 0;
-  //   for (struct SC_ProcessList_Node *current = processes->head; current !=
-  //   NULL;
-  //        current = current->next) {
-  //     sim->steps[step_i].processes[j] = current->value;
-  //     j++;
-  //   }
+  int totalBurstTime = SC_Total_busrt_time(processes);
 
-  //   size_t current_process = 0;
-  //   if (step_i == 1) {
-  //     current_process = 2;
-  //   }
-  //   sim->steps[step_i].current_process = current_process;
-  // }
+  sim->step_length = totalBurstTime;
+  sim->current_step = 0;
+  sim->steps = malloc(sizeof(SC_SimStepState) * totalBurstTime);
+
+  SC_ProcessList_Node *current = processes->head;
+  int time = 0;
+  while (current != NULL) {
+    SC_Process proc = current->value;
+
+    for (int i = 0; i < (int)proc.burst_time; i++) {
+      SC_SimStepState *step = &sim->steps[time];
+      step->current_process = proc.pid_idx;
+
+      step->process_length = processes->count;
+      step->processes = malloc(sizeof(SC_Process) * processes->count);
+
+      SC_ProcessList_Node *copy_node = processes->head;
+      int j = 0;
+      while (copy_node != NULL) {
+        step->processes[j++] = copy_node->value;
+        copy_node = copy_node->next;
+      }
+
+      time++;
+    }
+
+    current = current->next;
+  }
 }
 
 void parse_scheduling_file(SC_String *file_contents,

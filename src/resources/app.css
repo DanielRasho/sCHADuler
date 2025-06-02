@@ -1,43 +1,236 @@
 #simContainer {
-	background-color: red;
+	/* background-color: red; */
 	padding: 1rem;
 }
 
 #controlsContainer {
-	background-color: blue;
+	/* background-color: blue; */
 	padding: 1rem;
 }
 
 #simBox {
-	background-color: purple;
+	/* background-color: purple; */
 	padding-bottom: 1rem;
 }
 
 #processBox {
-	background-color: orange;
+	/* background-color: orange; */
 }
 
 #algorithmSelectionContainer {
-	background-color: skyblue;
+	/* background-color: skyblue; */
 }
 
 #loadFileContainer {
-	background-color: pink;
+	/* background-color: pink; */
 }
+
+/* .btn_main { */
+/* 	background-image: none; */
+/* 	color: #c69580; */
+/* } */
 
 .h1_title{
 	font-size: 2rem;
 }
 
-button {
-	background-image: none;
+.pid_box {
+	padding: 1rem 1rem;
+	font-weight: bold;
 }
 
-.btn_main {
-	/* Actual styles */
-	padding: 2rem 1rem;
-	/* Not working because of background-image */
-	/* background-color: skyblue; */
-	border: none;
-	font-weight: bold;
+.pid_0 {
+	background-color: skyblue;
+}
+.pid_1 {
+	background-color: #70ada4;
+}
+.pid_2 {
+	background-color: #5b9a9a;
+}
+.pid_3 {
+	background-color: #4d7d8d;
+	color: white;
+}
+.pid_4 {
+	background-color: #365471;
+	color: white;
+}
+.pid_5 {
+	background-color: #2a4268;
+	color: white;
+}
+.pid_6 {
+	background-color: #192449;
+	color: white;
+}
+.pid_7 {
+	background-color: #150d37;
+	color: white;
+}
+.pid_8 {
+	background-color: #140726;
+	color: white;
+}
+.pid_9 {
+	background-color: #0c1634;
+	color: white;
+}
+.pid_10 {
+	background-color: #102d40;
+	color: white;
+}
+.pid_11 {
+	background-color: #16444d;
+	color: white;
+}
+.pid_12 {
+	background-color: #1f605e;
+	color: white;
+}
+.pid_13 {
+	background-color: #2e8172;
+	color: white;
+}
+.pid_14 {
+	background-color: #409e74;
+	color: white;
+}
+.pid_15 {
+	background-color: #62bb7d;
+}
+.pid_16 {
+	background-color: #79cd7a;
+}
+.pid_17 {
+	background-color: #240d39;
+	color: white;
+}
+.pid_18 {
+	background-color: #38154e;
+	color: white;
+}
+.pid_19 {
+	background-color: #551e66;
+	color: white;
+}
+.pid_20 {
+	background-color: #712d7a;
+	color: white;
+}
+.pid_21 {
+	background-color: #92428f;
+	color: white;
+}
+.pid_22 {
+	background-color: #ad608f;
+	color: white;
+}
+.pid_23 {
+	background-color: #92b5b8;
+}
+.pid_24 {
+	background-color: #869da2;
+}
+.pid_25 {
+	background-color: #79878e;
+}
+.pid_26 {
+	background-color: #676c78;
+	color: white;
+}
+.pid_27 {
+	background-color: #595966;
+	color: white;
+}
+.pid_28 {
+	background-color: #47444e;
+	color: white;
+}
+.pid_29 {
+	background-color: #3f3a43;
+	color: white;
+}
+.pid_30 {
+	background-color: #362f37;
+	color: white;
+}
+.pid_31 {
+	background-color: #2a2328;
+	color: white;
+}
+.pid_32 {
+	background-color: #0e020a;
+	color: white;
+}
+.pid_33 {
+	background-color: #340f21;
+	color: white;
+}
+.pid_34 {
+	background-color: #4e1f32;
+	color: white;
+}
+.pid_35 {
+	background-color: #743444;
+	color: white;
+}
+.pid_36 {
+	background-color: #8c454e;
+	color: white;
+}
+.pid_37 {
+	background-color: #a25959;
+	color: white;
+}
+.pid_38 {
+	background-color: #b3736a;
+}
+.pid_39 {
+	background-color: #c69580;
+}
+.pid_40 {
+	background-color: #d2ae91;
+}
+.pid_41 {
+	background-color: #e5ccab;
+}
+.pid_42 {
+	background-color: #f2e9cd;
+}
+.pid_43 {
+	background-color: #f2dfa7;
+}
+.pid_44 {
+	background-color: #dfb684;
+}
+.pid_45 {
+	background-color: #d29567;
+}
+.pid_46 {
+	background-color: #bf6e50;
+}
+.pid_47 {
+	background-color: #b24e3d;
+	color: white;
+}
+.pid_48 {
+	background-color: #a43045;
+	color: white;
+}
+.pid_49 {
+	background-color: #952452;
+	color: white;
+}
+
+.top_bar {
+	border-bottom: 1px solid black;
+	padding: 10px;
+}
+
+.simulation {
+	padding: 5px;
+}
+
+.main_content {
 }

@@ -277,20 +277,14 @@ int SC_String_ParseInt(SC_String *str, SC_Err err) {
       result += (digit - '0') * current_factor;
       current_factor *= 10;
     } break;
+
     case '-': {
-      if (result != 0) {
+      if (i != 0) {
         *err = INVALID_STRING;
         return 0;
       }
 
       current_factor *= -1;
-    } break;
-
-    case ' ' | '\t' | '\n' | '\r': {
-      if (result != 0) {
-        *err = INVALID_STRING;
-        return 0;
-      }
     } break;
 
     default: {
@@ -301,6 +295,22 @@ int SC_String_ParseInt(SC_String *str, SC_Err err) {
   }
 
   return result;
+}
+
+/**
+ * Removes all characters that match search from the start of the string.
+ */
+void SC_String_TrimStart(SC_String *str, char search) {
+  for (int i = 0; i < str->length; i++) {
+    if (str->data[i] != search) {
+      break;
+    }
+
+    str->length -= 1;
+    int next_pos = i + 1;
+    memmove(str->data, str->data + next_pos, str->length);
+    i--;
+  }
 }
 
 struct SC_StringList_Node {
@@ -569,6 +579,7 @@ typedef struct {
 typedef struct {
   size_t step_length;
   size_t current_step;
+  float avg_waiting_time;
   SC_SimStepState *steps;
 } SC_Simulation;
 
@@ -656,6 +667,13 @@ void simulate_shortest_job_first(SC_ProcessList *processes,
   }
 }
 
+void simulate_shortest_first(SC_ProcessList *processes, SC_Simulation *sim) {}
+void simulate_shortest_remaining(SC_ProcessList *processes,
+                                 SC_Simulation *sim) {}
+void simulate_round_robin(SC_ProcessList *processes, SC_Simulation *sim,
+                          int quantum) {}
+void simulate_priority(SC_ProcessList *processes, SC_Simulation *sim) {}
+
 void parse_scheduling_file(SC_String *file_contents,
                            struct SC_Arena *pids_arena,
                            struct SC_Arena *processes_arena,
@@ -674,8 +692,6 @@ void parse_scheduling_file(SC_String *file_contents,
   for (int i = 0; i < file_contents->length; i++) {
     char current_char = SC_String_CharAt(file_contents, i);
     switch (current_char) {
-    case ' ': {
-    } break;
     case '\n': {
 
       if (4 != current_column) {
@@ -683,6 +699,7 @@ void parse_scheduling_file(SC_String *file_contents,
         return;
       }
 
+      SC_String_TrimStart(&buffer, ' ');
       int column_value = SC_String_ParseInt(&buffer, err);
       if (*err != NO_ERROR) {
         return;
@@ -714,6 +731,7 @@ void parse_scheduling_file(SC_String *file_contents,
         }
         current_process.pid_idx = pid_list->count - 1;
       } else {
+        SC_String_TrimStart(&buffer, ' ');
         int column_value = SC_String_ParseInt(&buffer, err);
         if (*err != NO_ERROR) {
           return;
@@ -834,7 +852,7 @@ typedef struct {
   SC_Action *actions;
   /** Total number of actions in the list. */
   int action_count;
-} Resource;
+} SC_Resource;
 
 /**
  * Represents a single step in a process's execution timeline.
@@ -873,7 +891,7 @@ typedef struct {
   int process_count;
 
   /** List of all resources used in the simulation. */
-  Resource *resources;
+  SC_Resource *resources;
   int resource_count;
 
   /** One timeline per process, tracking its execution history. */

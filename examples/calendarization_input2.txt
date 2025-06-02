@@ -1,4 +1,4 @@
-P6, 8, 7, 1
-P3, 4, 15, 2
-P2, 16, 2, 3
-P8, 5, 20, 1
+Chrome, 8, 7, 1
+Neovim, 4, 15, 2
+Ghostty, 16, 2, 3
+Kernel Process, 5, 20, 1

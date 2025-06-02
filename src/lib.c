@@ -277,20 +277,14 @@ int SC_String_ParseInt(SC_String *str, SC_Err err) {
       result += (digit - '0') * current_factor;
       current_factor *= 10;
     } break;
+
     case '-': {
-      if (result != 0) {
+      if (i != 0) {
         *err = INVALID_STRING;
         return 0;
       }
 
       current_factor *= -1;
-    } break;
-
-    case ' ' | '\t' | '\n' | '\r': {
-      if (result != 0) {
-        *err = INVALID_STRING;
-        return 0;
-      }
     } break;
 
     default: {
@@ -301,6 +295,22 @@ int SC_String_ParseInt(SC_String *str, SC_Err err) {
   }
 
   return result;
+}
+
+/**
+ * Removes all characters that match search from the start of the string.
+ */
+void SC_String_TrimStart(SC_String *str, char search) {
+  for (int i = 0; i < str->length; i++) {
+    if (str->data[i] != search) {
+      break;
+    }
+
+    str->length -= 1;
+    int next_pos = i + 1;
+    memmove(str->data, str->data + next_pos, str->length);
+    i--;
+  }
 }
 
 struct SC_StringList_Node {
@@ -660,8 +670,6 @@ void parse_scheduling_file(SC_String *file_contents,
   for (int i = 0; i < file_contents->length; i++) {
     char current_char = SC_String_CharAt(file_contents, i);
     switch (current_char) {
-    case ' ': {
-    } break;
     case '\n': {
 
       if (4 != current_column) {
@@ -669,6 +677,7 @@ void parse_scheduling_file(SC_String *file_contents,
         return;
       }
 
+      SC_String_TrimStart(&buffer, ' ');
       int column_value = SC_String_ParseInt(&buffer, err);
       if (*err != NO_ERROR) {
         return;
@@ -700,6 +709,7 @@ void parse_scheduling_file(SC_String *file_contents,
         }
         current_process.pid_idx = pid_list->count - 1;
       } else {
+        SC_String_TrimStart(&buffer, ' ');
         int column_value = SC_String_ParseInt(&buffer, err);
         if (*err != NO_ERROR) {
           return;

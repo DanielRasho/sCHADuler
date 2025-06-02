@@ -269,6 +269,8 @@ static void setup_label_cb(GtkSignalListItemFactory *factory,
 static void bind_pid_cb(GtkSignalListItemFactory *factory,
                         GtkListItem *listitem) {
   GtkWidget *label = gtk_list_item_get_child(listitem);
+  gtk_widget_set_hexpand(label, TRUE);
+
   GObject *item = gtk_list_item_get_item(GTK_LIST_ITEM(listitem));
   size_t pid_idx = sc_process_gio_get_pid_idx(SC_PROCESS_GIO(item));
 
@@ -799,12 +801,14 @@ static GtkWidget *CalendarView(GtkWindow *window) {
   gtk_widget_set_vexpand(tableView, TRUE);
   gtk_widget_set_hexpand(tableView, TRUE);
   gtk_column_view_set_show_column_separators(GTK_COLUMN_VIEW(tableView), TRUE);
+  gtk_column_view_set_show_row_separators(GTK_COLUMN_VIEW(tableView), TRUE);
 
   // PID column setup
   GtkListItemFactory *factory = gtk_signal_list_item_factory_new();
   g_signal_connect(factory, "setup", G_CALLBACK(setup_label_cb), NULL);
   g_signal_connect(factory, "bind", G_CALLBACK(bind_pid_cb), NULL);
   GtkColumnViewColumn *col = gtk_column_view_column_new("PID", factory);
+  gtk_column_view_column_set_expand(col, TRUE);
   gtk_column_view_append_column(GTK_COLUMN_VIEW(tableView), col);
 
   // Burst time column setup
@@ -890,6 +894,7 @@ static GtkWidget *CalendarView(GtkWindow *window) {
   g_signal_connect(factory, "setup", G_CALLBACK(setup_label_cb), NULL);
   g_signal_connect(factory, "bind", G_CALLBACK(bind_algorithm_name_cb), NULL);
   col = gtk_column_view_column_new("Algorithm Name", factory);
+  gtk_column_view_column_set_expand(col, TRUE);
   gtk_column_view_append_column(GTK_COLUMN_VIEW(reviewTable), col);
 
   // AVG Waiting time setup

@@ -220,14 +220,26 @@ static void update_sim_canvas(SC_UpdateSimCanvasData params, SC_Err err) {
   SC_Arena_Reset(&SIM_BTN_LABELS_ARENA);
   for (int i = 0; i <= current_sim->current_step; i++) {
     size_t current_process = current_sim->steps[i].current_process;
-    size_t pid_idx = current_sim->steps[i].processes[current_process].pid_idx;
-    SC_String pid_str = SC_StringList_GetAt(&PID_LIST, pid_idx, err);
-    if (*err != NO_ERROR) {
-      fprintf(stderr,
-              "SIM_STEP_ERROR (%d): Failed to get pid for process (idx: %zu): "
-              "Failed to get PID from stringlist with idx: %zu\n",
-              i, current_process, pid_idx);
-      return;
+    size_t max = -1;
+
+    size_t pid_idx = 49;
+    char *data = "<N/A>";
+    SC_String pid_str = {
+        .data = data,
+        .length = strlen(data),
+        .data_capacity = strlen(data),
+    };
+    if (current_process != max) {
+      pid_idx = current_sim->steps[i].processes[current_process].pid_idx;
+      pid_str = SC_StringList_GetAt(&PID_LIST, pid_idx, err);
+      if (*err != NO_ERROR) {
+        fprintf(
+            stderr,
+            "SIM_STEP_ERROR (%d): Failed to get pid for process (idx: %zu): "
+            "Failed to get PID from stringlist with idx: %zu\n",
+            i, current_process, pid_idx);
+        return;
+      }
     }
 
     char css_class[] = {'p', 'i', 'd', '_', 0, 0, 0, 0, 0, 0, 0, 0};

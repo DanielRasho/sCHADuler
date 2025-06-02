@@ -628,7 +628,7 @@ void simulate_first_in_first_out(SC_ProcessList *processes,
 
   // for (int step_i = 0; step_i < 2; step_i++) {
   //   sim->steps[step_i].process_length = processes->count;
-
+  //
   //   int j = 0;
   //   for (struct SC_ProcessList_Node *current = processes->head; current !=
   //   NULL;
@@ -636,8 +636,8 @@ void simulate_first_in_first_out(SC_ProcessList *processes,
   //     sim->steps[step_i].processes[j] = current->value;
   //     j++;
   //   }
-
-  //   size_t current_process = 0;
+  //
+  //   size_t current_process = -1;
   //   if (step_i == 1) {
   //     current_process = 2;
   //   }

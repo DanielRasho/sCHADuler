@@ -780,7 +780,125 @@ void simulate_shortest_remaining(SC_ProcessList *processes,
 }
 
 void simulate_round_robin(SC_ProcessList *processes, SC_Simulation *sim,
-                          int quantum) {}
+                          int quantum) {
+  if (!processes || !sim || processes->count == 0 || quantum <= 0)
+    return;
+
+  SC_ProcessList_sort(processes, compare_by_arrival_time);
+
+  int totalBurstTime = SC_Total_busrt_time(processes) + 1; // +1 para paso final
+  int n = processes->count;
+
+  sim->steps = calloc(totalBurstTime * 2,
+                      sizeof(SC_SimStepState)); // más pasos por rotación
+  sim->step_length = 0;                         // se actualiza dinámicamente
+  sim->current_step = 0;
+
+  int *remaining_time = malloc(sizeof(int) * n);
+  int *arrival_time = malloc(sizeof(int) * n);
+  size_t *pid = malloc(sizeof(size_t) * n);
+  int *start_time = malloc(sizeof(int) * n);
+  int *finish_time = malloc(sizeof(int) * n);
+  int *visited =
+      calloc(n, sizeof(int)); // para evitar duplicar procesos en cola
+
+  for (int i = 0; i < n; i++) {
+    remaining_time[i] = 0;
+    arrival_time[i] = 0;
+    pid[i] = 0;
+    start_time[i] = -1;
+    finish_time[i] = -1;
+  }
+
+  SC_ProcessList_Node *temp = processes->head;
+  int i = 0;
+  while (temp && i < n) {
+    remaining_time[i] = temp->value.burst_time;
+    arrival_time[i] = temp->value.arrival_time;
+    pid[i] = temp->value.pid_idx;
+    i++;
+    temp = temp->next;
+  }
+
+  // Cola circular simple de procesos listos
+  int *queue = malloc(sizeof(int) * totalBurstTime * 2);
+  int front = 0, rear = 0;
+
+  int time = 0;
+  int completed = 0;
+  int current_process = -1;
+  int time_slice = 0;
+
+  while (completed < n || current_process != -1) {
+    // Encolar nuevos procesos
+    for (int j = 0; j < n; j++) {
+      if (arrival_time[j] == time && remaining_time[j] > 0 && !visited[j]) {
+        queue[rear++] = j;
+        visited[j] = 1;
+      }
+    }
+
+    // Si no hay proceso ejecutándose, tomar uno de la cola
+    if (current_process == -1 && front < rear) {
+      current_process = queue[front++];
+      time_slice = 0;
+    }
+
+    // Guardar paso
+    SC_SimStepState *step = &sim->steps[sim->step_length++];
+    step->current_process = (current_process != -1) ? pid[current_process] : -1;
+    step->process_length = n;
+    step->processes = malloc(sizeof(SC_Process) * n);
+
+    temp = processes->head;
+    for (int k = 0; k < n && temp; k++, temp = temp->next) {
+      step->processes[k] = temp->value;
+      step->processes[k].burst_time = remaining_time[k];
+    }
+
+    // Ejecutar proceso actual
+    if (current_process != -1) {
+      if (start_time[current_process] == -1)
+        start_time[current_process] = time;
+
+      remaining_time[current_process]--;
+      time_slice++;
+
+      if (remaining_time[current_process] == 0) {
+        finish_time[current_process] = time + 1;
+        completed++;
+        current_process = -1;
+      } else if (time_slice == quantum) {
+        // Termina su quantum, vuelve a la cola
+        queue[rear++] = current_process;
+        current_process = -1;
+      }
+    }
+
+    time++;
+  }
+
+  // Calcular tiempo promedio de espera
+  float total_waiting = 0.0f;
+  temp = processes->head;
+  for (int j = 0; j < n && temp != NULL; j++, temp = temp->next) {
+    int turnaround = finish_time[j] - arrival_time[j];
+    int waiting = turnaround - temp->value.burst_time;
+    if (waiting < 0)
+      waiting = 0;
+    total_waiting += waiting;
+  }
+
+  sim->avg_waiting_time = total_waiting / n;
+
+  free(remaining_time);
+  free(arrival_time);
+  free(pid);
+  free(start_time);
+  free(finish_time);
+  free(queue);
+  free(visited);
+}
 
 void simulate_priority(SC_ProcessList *processes, SC_Simulation *sim) {
   SC_ProcessList_sort(processes, compare_by_priority);

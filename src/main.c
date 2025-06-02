@@ -287,7 +287,8 @@ void show_alert_dialog(GtkWidget *parent_widget, const char *title,
 
   // Close button
   GtkWidget *close_button = gtk_button_new_with_label("Close");
-  g_signal_connect_swapped(close_button, "clicked", G_CALLBACK(gtk_window_destroy), dialog);
+  g_signal_connect_swapped(close_button, "clicked",
+                           G_CALLBACK(gtk_window_destroy), dialog);
   gtk_box_append(GTK_BOX(content_box), close_button);
   gtk_widget_add_css_class(close_button, "alert_popup_btn");
 
@@ -504,7 +505,7 @@ static void file_dialog_finished(GObject *source_object, GAsyncResult *res,
   g_list_store_remove_all(ev_data.review_store);
   int quantum = gtk_spin_button_get_value_as_int(ev_data.spin_button);
   SC_Arena_Reset(&SIM_ARENA);
-  for (int i = 0; i < SC_Priority; i++) {
+  for (int i = 0; i < 5; i++) {
     SIM_STATES[i] = SC_Arena_Alloc(&SIM_ARENA, sizeof(SC_Simulation), &err);
     if (err != NO_ERROR) {
       fprintf(stderr, "ERROR: %s\n", SC_Err_ToString(&err));

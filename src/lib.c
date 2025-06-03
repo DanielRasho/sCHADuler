@@ -14,6 +14,8 @@ static const size_t OUT_OF_BOUNDS = 5;
 static const size_t EMPTY_STRING = 6;
 static const size_t INVALID_STRING = 7;
 static const size_t INVALID_TXT_FILE = 8;
+static const size_t RESOURCE_NOT_FOUND = 9;
+static const size_t PROCESS_NOT_FOUND = 10;
 
 static const char *SC_Err_ToString(SC_Err err) {
   size_t val = *err;
@@ -33,6 +35,10 @@ static const char *SC_Err_ToString(SC_Err err) {
     return "The supplied string is invalid for the operation!";
   } else if (val == INVALID_TXT_FILE) {
     return "The supplied TXT file is invalid!";
+  } else if (val == RESOURCE_NOT_FOUND) {
+    return "Resource not found!";
+  } else if (val == PROCESS_NOT_FOUND) {
+    return "Process not found!";
   } else {
     return "INVALID ERROR VALUE RECEIVED!";
   }
@@ -311,6 +317,77 @@ void SC_String_TrimStart(SC_String *str, char search) {
     memmove(str->data, str->data + next_pos, str->length);
     i--;
   }
+}
+
+int SC_String_LineCount(SC_String *str) {
+  if (str == NULL || str->data == NULL || str->length == 0) {
+    return 0;
+  }
+
+  int count = 1; // At least one line even if no '\n'
+  for (size_t i = 0; i < str->length; ++i) {
+    if (str->data[i] == '\n') {
+      count++;
+    }
+  }
+
+  return count;
+}
+
+SC_String SC_String_GetLine(SC_String *str, size_t line_number) {
+  size_t start = 0;
+  size_t current_line = 0;
+
+  // Find the start index of the desired line
+  for (size_t i = 0; i < str->length; ++i) {
+    if (SC_String_CharAt(str, i) == '\n') {
+      if (current_line == line_number) {
+        break;
+      }
+      current_line++;
+      start = i + 1;
+    }
+  }
+
+  // If we never reached the desired line
+  if (current_line < line_number) {
+    return (SC_String){.data = NULL, .length = 0, .data_capacity = 0};
+  }
+
+  // Find the end index of the line
+  size_t end = start;
+  while (end < str->length && SC_String_CharAt(str, end) != '\n') {
+    end++;
+  }
+
+  return (SC_String){
+      .data = &str->data[start],
+      .length = end - start,
+      .data_capacity = 0 // capacity is not meaningful here
+  };
+}
+
+SC_String SC_String_GetCSVColumn(SC_String *str, size_t column_index) {
+  size_t start = 0;
+  size_t current_col = 0;
+
+  for (size_t i = 0; i <= str->length; ++i) {
+    // Either end of string or comma
+    if (i == str->length || SC_String_CharAt(str, i) == ',') {
+      if (current_col == column_index) {
+        return (SC_String){
+            .data = &str->data[start],
+            .length = i - start,
+            .data_capacity = 0 // meaningless in a slice
+        };
+      }
+      current_col++;
+      start = i + 1;
+    }
+  }
+
+  // Column index out of bounds
+  return (SC_String){.data = NULL, .length = 0, .data_capacity = 0};
 }
 
 struct SC_StringList_Node {
@@ -1345,6 +1422,19 @@ void print_sync_process(const SC_SyncProcess *process) {
           process_state_to_string(process->current_state));
 }
 
+void print_sc_action(const SC_Action *action) {
+  if (!action) {
+    fprintf(stderr, "SC_Action_Print: NULL pointer provided.\n");
+    return;
+  }
+
+  fprintf(stderr,
+          "SC_Action { id: %d, pid: %d, resource_id: %d, cycle: %d, executed: "
+          "%s, priority: %d }\n",
+          action->id, action->pid, action->resource_id, action->cycle,
+          action->executed ? "true" : "false", action->priority);
+}
+
 void print_sc_resource(const SC_Resource *res) {
   fprintf(stderr, "Resource ID: %d\n", res->id);
   fprintf(stderr, "  Counter: %d\n", res->counter);
@@ -1353,7 +1443,7 @@ void print_sc_resource(const SC_Resource *res) {
 
   for (int i = 0; i < res->action_count; ++i) {
     fprintf(stderr, "    Action #%d:\n", i);
-    // print_sc_action(&res->actions[i]); // define this based on SC_Action
+    print_sc_action(&res->actions[i]);
   }
 }
 
@@ -1405,6 +1495,11 @@ void fill_processes(SC_String *file_contents, SC_StringList *process_names,
 
 void fill_resources(SC_String *file_contents, SC_StringList *resources_names,
                     SC_SyncSimulator *simulator, SC_Err err);
+
+void fill_actions(SC_String *file_contents, struct SC_Arena *sync_arena,
+                  SC_StringList *resources_names, SC_StringList *process_names,
+                  SC_StringList *actions_names, SC_SyncSimulator *simulator,
+                  SC_Err err);
 
 void parse_syncProcess_file(SC_String *process_file, SC_String *resource_file,
                             SC_String *actions_file,
@@ -1490,8 +1585,15 @@ void parse_syncProcess_file(SC_String *process_file, SC_String *resource_file,
 
   for (int i = 0; i < simulator->resource_count; ++i) {
     SC_Resource *res = &simulator->resources[i];
-    print_sc_resource(
-        res); // or access fields like proc->id, proc->burst_time, etc.
+    print_sc_resource(res);
+  }
+
+  fill_actions(actions_file, sync_arena, resources_names, process_names,
+               actions_names, simulator, err);
+
+  for (int i = 0; i < simulator->resource_count; ++i) {
+    SC_Resource *res = &simulator->resources[i];
+    print_sc_resource(res);
   }
 }
 
@@ -1667,6 +1769,161 @@ void fill_resources(SC_String *file_contents, SC_StringList *resources_names,
     } break;
 
     case ',': {
+      buffer.length = 0;
+      current_column++;
+    } break;
+    default: {
+      SC_String_AppendChar(&buffer, current_char, err);
+      if (*err != NO_ERROR) {
+        return;
+      }
+    }
+    }
+  }
+}
+
+/** Ignores the last charactef of the b string */
+SC_Bool SC_String_Equals(SC_String *a, SC_String *b) {
+  if (a->length != b->length - 1) {
+    return SC_FALSE;
+  }
+
+  for (size_t i = 0; i < a->length; ++i) {
+    if (a->data[i] != b->data[i]) {
+      return SC_FALSE;
+    }
+  }
+
+  return SC_TRUE;
+}
+
+int SC_StringList_IndexOf(SC_StringList *list, SC_String *target) {
+  if (!list || !target)
+    return -1;
+
+  struct SC_StringList_Node *current = list->head;
+  int index = 0;
+
+  while (current != NULL) {
+    if (SC_String_Equals(target, &current->value) == SC_TRUE) {
+      return index;
+    }
+    current = current->next;
+    index++;
+  }
+
+  return -1; // not found
+}
+
+void fill_actions(SC_String *file_contents, struct SC_Arena *sync_arena,
+                  SC_StringList *resources_names, SC_StringList *process_names,
+                  SC_StringList *actions_names, SC_SyncSimulator *simulator,
+                  SC_Err err) {
+
+  int actions_resource_index[actions_names->count];
+  int actions_index_in_resource[actions_names->count];
+
+  // COUNT ACTIONS PER RESOURCE
+
+  // The files always have an extra line jump, hence -1
+  int num_lines = SC_String_LineCount(file_contents) - 1;
+
+  for (int line = 0; line < num_lines; line++) {
+    SC_String lineValue = SC_String_GetLine(file_contents, line);
+
+    SC_String resource = SC_String_GetCSVColumn(&lineValue, 2);
+    int index = SC_StringList_IndexOf(resources_names, &resource);
+    if (index == -1) {
+      *err = RESOURCE_NOT_FOUND;
+      return;
+    }
+    fprintf(stderr, "%.*s\n", (int)resource.length, resource.data);
+
+    actions_index_in_resource[line] = simulator->resources[index].action_count;
+    simulator->resources[index].action_count += 1;
+    actions_resource_index[line] = index;
+  }
+
+  // ALLOCATE SPACE FOR ACTIONS IN EACH RESOURCE;
+
+  for (int i = 0; i < simulator->resource_count; ++i) {
+    SC_Action *actions = SC_Arena_Alloc(
+        sync_arena, sizeof(SC_Action) * simulator->resources[i].action_count,
+        err);
+    simulator->resources[i].actions = actions;
+  }
+
+  // PARSE EACH ACTION;
+
+  const int b_max_length = 255;
+  char b_data[b_max_length]; // Max length of a column
+  SC_String buffer = {
+      .data = b_data,
+      .length = 0,
+      .data_capacity = b_max_length,
+  };
+
+  int current_column = 1;
+  int current_row = 0;
+
+  for (int i = 0; i < file_contents->length; i++) {
+
+    char current_char = SC_String_CharAt(file_contents, i);
+    switch (current_char) {
+
+    case '\n': {
+
+      if (4 != current_column) {
+        *err = INVALID_TXT_FILE;
+        return;
+      }
+
+      SC_String_TrimStart(&buffer, ' ');
+      int column_value = SC_String_ParseInt(&buffer, err);
+      if (*err != NO_ERROR) {
+        return;
+      }
+
+      int resourceIndex = actions_resource_index[current_row];
+      int actionIndex = actions_index_in_resource[current_row];
+
+      simulator->resources[resourceIndex].actions[actionIndex].id = current_row;
+      simulator->resources[resourceIndex].actions[actionIndex].cycle =
+          column_value;
+      simulator->resources[resourceIndex].actions[actionIndex].executed =
+          SC_FALSE;
+      simulator->resources[resourceIndex].actions[actionIndex].resource_id =
+          resourceIndex;
+
+      buffer.length = 0;
+      current_column = 1;
+      current_row++;
+
+    } break;
+
+    case ',': {
+      if (1 == current_column) {
+
+        int procIndex = SC_StringList_IndexOf(process_names, &buffer);
+        if (procIndex == -1) {
+          *err = PROCESS_NOT_FOUND;
+          return;
+        }
+
+        int resourceIndex = actions_resource_index[current_row];
+        int actionIndex = actions_index_in_resource[current_row];
+
+        simulator->resources[resourceIndex].actions[actionIndex].priority =
+            simulator->processes[procIndex].priority;
+
+        simulator->resources[resourceIndex].actions[actionIndex].pid =
+            simulator->processes[procIndex].id;
+
+      } else if (current_column > 4) {
+        *err = INVALID_TXT_FILE;
+        return;
+      }
+
       buffer.length = 0;
       current_column++;
     } break;

@@ -1508,7 +1508,7 @@ void fill_actions(SC_String *file_contents, struct SC_Arena *sync_arena,
 void parse_syncProcess_file(SC_String *process_file, SC_String *resource_file,
                             SC_String *actions_file,
                             struct SC_Arena *sync_arena,
-                            SC_SyncSimulator *simulator,
+                            SC_SyncSimulator **simulator_ptr,
                             SC_StringList *process_names,
                             SC_StringList *resources_names,
                             SC_StringList *actions_names, SC_Err err) {
@@ -1554,10 +1554,13 @@ void parse_syncProcess_file(SC_String *process_file, SC_String *resource_file,
   }
 
   // ALLOCATE SIMULATION
+
+  SC_SyncSimulator *simulator = *simulator_ptr;
   simulator = SC_Arena_Alloc(sync_arena, sizeof(SC_SyncSimulator), err);
   if (*err != NO_ERROR) {
     return;
   }
+  *simulator_ptr = simulator;
 
   // PROCCESSES
   SC_SyncProcess *proccesses = SC_Arena_Alloc(

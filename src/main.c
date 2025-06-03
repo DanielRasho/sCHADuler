@@ -751,6 +751,7 @@ static void sync_handle_load_actions(GtkWidget *widget, gpointer data) {
 
 static void load_sync_files(GtkWidget *widget, gpointer data) {
 
+  SC_SyncGlobalEventData *ev_data = (SC_SyncGlobalEventData *)data;
   if (PROCESS_FILE_CONTENT.length == 0 || RESOURCES_FILE_CONTENT.length == 0 ||
       ACTIONS_FILE_CONTENT.length == 0) {
     // Create and show an alert dialog
@@ -761,21 +762,47 @@ static void load_sync_files(GtkWidget *widget, gpointer data) {
 
   size_t err = NO_ERROR;
 
-  // TODO: FREE TIMELINES STEP DATA
+  // FREE DATA
+  if (SYNC_SIM_STATE != NULL) {
+    for (int i = 0; i < SYNC_SIM_STATE->timeline_count; ++i) {
+      SC_Slice_deinit(&SYNC_SIM_STATE->process_timelines[i].entries);
+    }
+  }
+
   SC_Arena_Reset(&SYNC_SIM_ARENA);
   SC_StringList_Reset(&SYNC_PROCESS_NAMES);
   SC_StringList_Reset(&SYNC_RESOURCES_NAMES);
   SC_StringList_Reset(&SYNC_ACTIONS_NAMES);
 
   parse_syncProcess_file(&PROCESS_FILE_CONTENT, &RESOURCES_FILE_CONTENT,
-                         &ACTIONS_FILE_CONTENT, &SYNC_SIM_ARENA, SYNC_SIM_STATE,
-                         &SYNC_PROCESS_NAMES, &SYNC_RESOURCES_NAMES,
-                         &SYNC_ACTIONS_NAMES, &err);
+                         &ACTIONS_FILE_CONTENT, &SYNC_SIM_ARENA,
+                         &SYNC_SIM_STATE, &SYNC_PROCESS_NAMES,
+                         &SYNC_RESOURCES_NAMES, &SYNC_ACTIONS_NAMES, &err);
 
   if (err != NO_ERROR) {
-    fprintf(stderr, "Something went wrong during data parsing.\n");
+    show_alert_dialog(widget, "Error during files parsing",
+                      SC_Err_ToString(&err));
     return;
   }
+
+  // SET SINCRONZATION MODE
+  GtkSwitch *sync_switch =
+      GTK_SWITCH(ev_data->new_file_loaded.syncronization_switch);
+  gboolean is_active = gtk_switch_get_active(sync_switch);
+
+  if (is_active) {
+    int semaphore_count = (int)gtk_spin_button_get_value(
+        ev_data->new_file_loaded.semaphore_quantity);
+    SYNC_SIM_STATE->semaphore_count = semaphore_count;
+    SYNC_SIM_STATE->sync_type = SYNC_SEMAPHORE;
+  } else {
+    SYNC_SIM_STATE->sync_type = SYNC_MUTEX;
+  }
+
+  // SET EXTRA ATTRIBUTES
+  SYNC_SIM_STATE->current_cycle = 0;
+  SYNC_SIM_STATE->total_cycles = 0;
+  SYNC_SIM_STATE->simulation_running = SC_TRUE;
 }
 
 // ################################
@@ -1323,6 +1350,13 @@ int main(int argc, char **argv) {
   g_signal_connect(app, "activate", G_CALLBACK(activate), NULL);
   int status = g_application_run(G_APPLICATION(app), argc, argv);
   g_object_unref(app);
+
+  fprintf(stderr, "INFO: deiniting syncronization slices\n");
+  if (SYNC_SIM_STATE != NULL) {
+    for (int i = 0; i < SYNC_SIM_STATE->timeline_count; ++i) {
+      SC_Slice_deinit(&SYNC_SIM_STATE->process_timelines[i].entries);
+    }
+  }
 
   fprintf(stderr, "INFO: deiniting all arenas\n");
   SC_Arena_Deinit(&PROCESS_LIST_ARENA);

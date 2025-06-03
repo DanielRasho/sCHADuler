@@ -486,6 +486,7 @@ typedef struct {
   size_t pid_idx;
   uint burst_time;
   uint arrival_time;
+  uint waiting_time;
   uint priority;
 } SC_Process;
 
@@ -583,9 +584,12 @@ typedef struct {
   SC_SimStepState *steps;
 } SC_Simulation;
 
-void print_simulation(const SC_Simulation *sim);
 SC_Process SC_Verify_AT_BT(SC_ProcessList *list, int step);
-
+static int compare_proc_ptr(const void *a, const void *b) {
+  const SC_Process *pa = *(const SC_Process **)a;
+  const SC_Process *pb = *(const SC_Process **)b;
+  return compare_by_arrival_time(*pa, *pb);
+}
 /**
  * Computes the FIFO scheduling simulation
  *
@@ -607,8 +611,23 @@ void simulate_first_in_first_out(SC_ProcessList *processes,
 
   SC_ProcessList_Node *current = processes->head;
   int time = 0;
+  int process_index = 0;
+  int elapsed_time = 0; // Tiempo transcurrido total para el scheduling FIFO
+  float total_waiting_time = 0;
+
   while (current != NULL) {
     SC_Process proc = current->value;
+
+    // Waiting time = elapsed_time - arrival_time (si es negativo, 0)
+    int waiting_time = elapsed_time - proc.arrival_time;
+    if (waiting_time < 0)
+      waiting_time = 0;
+
+    // Guardar el waiting time en el proceso (si se puede modificar
+    // directamente)
+    proc.waiting_time = waiting_time;
+
+    total_waiting_time += waiting_time;
 
     for (int i = 0; i < (int)proc.burst_time; i++) {
       SC_SimStepState *step = &sim->steps[time];
@@ -620,15 +639,32 @@ void simulate_first_in_first_out(SC_ProcessList *processes,
       SC_ProcessList_Node *copy_node = processes->head;
       int j = 0;
       while (copy_node != NULL) {
-        step->processes[j++] = copy_node->value;
+        SC_Process p = copy_node->value;
+
+        if (j < process_index) {
+          p.burst_time = 0;
+        } else if (j == process_index) {
+          p.burst_time = proc.burst_time - i - 1;
+          p.waiting_time = waiting_time; // También puedes actualizarlo aquí
+                                         // para mostrar en steps
+        } else {
+          p.burst_time = copy_node->value.burst_time;
+          p.waiting_time = 0;
+        }
+
+        step->processes[j++] = p;
         copy_node = copy_node->next;
       }
 
       time++;
     }
 
+    elapsed_time += proc.burst_time;
     current = current->next;
+    process_index++;
   }
+
+  sim->avg_waiting_time = total_waiting_time / (float)processes->count;
 }
 
 void simulate_shortest_first(SC_ProcessList *processes, SC_Simulation *sim) {

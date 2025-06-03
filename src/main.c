@@ -444,6 +444,23 @@ static void change_algorithm_to_priority(GtkCheckButton *self, gpointer *data) {
   update_sim_canvas(ev_data->update_sim_canvas, &err);
 }
 
+static void handle_quantum_updated(GtkSpinButton *self, gpointer *data) {
+  SC_GlobalEventData *ev_data = (SC_GlobalEventData *)data;
+
+  if (NULL == SIM_STATES[SC_RoundRobin]) {
+    fprintf(stderr, "INFO: Skipping rerendering because state is null\n");
+    return;
+  }
+
+  fprintf(stderr, "INFO: Rerendering based on new quantum...\n");
+  int quantum = gtk_spin_button_get_value_as_int(self);
+  SIM_STATES[SC_RoundRobin]->current_step = 0;
+  simulate_round_robin(&PROCESS_LIST, SIM_STATES[SC_RoundRobin], quantum);
+
+  size_t err = NO_ERROR;
+  update_sim_canvas(ev_data->update_sim_canvas, &err);
+}
+
 static void file_dialog_finished(GObject *source_object, GAsyncResult *res,
                                  gpointer data) {
   SC_GlobalEventData *global_ev_data = (SC_GlobalEventData *)data;
@@ -972,6 +989,8 @@ static GtkWidget *CalendarView(GtkWindow *window) {
   GtkWidget *quantumEntry = gtk_spin_button_new_with_range(0, 1000, 1);
   gtk_widget_set_valign(quantumEntry, GTK_ALIGN_CENTER);
   evData->new_file_loaded.spin_button = GTK_SPIN_BUTTON(quantumEntry);
+  g_signal_connect(quantumEntry, "value-changed",
+                   G_CALLBACK(handle_quantum_updated), evData);
 
   GtkWidget *backButton = MainButton("Back", handle_previous_click, evData);
   gtk_box_append(GTK_BOX(simControlsBox), backButton);

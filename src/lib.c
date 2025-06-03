@@ -1211,8 +1211,7 @@ typedef struct {
   SC_ProcessState current_state;
   /** Remaining cycles to run. */
   int remaining_time;
-  /** Indicates whether the process hasn't dead yet. */
-  SC_Bool is_active;
+
 } SC_SyncProcess;
 
 /**
@@ -1244,8 +1243,6 @@ typedef struct {
   int counter;
   /** Maximum value the counter can hold (initial value). */
   int max_counter;
-  /** Synchronization mechanism used (mutex or semaphore). */
-  SC_SyncMechanism sync_type;
   /**
    * Unordered list of actions related to this resource.
    * Requires a full scan to process all actions.
@@ -1305,11 +1302,60 @@ typedef struct {
   /** Indicates whether the simulation is still running. */
   SC_Bool simulation_running;
 
+  /** Synchronization mechanism used (mutex or semaphore). */
+  SC_SyncMechanism sync_type;
+
   int semaphore_count;
 
   /** Total number of simulation cycles. */
   int total_cycles;
 } SC_SyncSimulator;
+
+// You can adjust this enum name/values based on your actual definition
+const char *process_state_to_string(SC_ProcessState state) {
+  switch (state) {
+  case STATE_READY:
+    return "READY";
+  case STATE_ACCESSED:
+    return "ACCESSED";
+  case STATE_COMPUTING:
+    return "COMPUTING";
+  case STATE_WAITING:
+    return "WAITING";
+  case STATE_FINISHED:
+    return "FINISHED";
+  default:
+    return "UNKNOWN";
+  }
+}
+
+void print_sync_process(const SC_SyncProcess *process) {
+  if (process == NULL) {
+    fprintf(stderr, "SC_SyncProcess is NULL\n");
+    return;
+  }
+
+  fprintf(stderr, "SC_SyncProcess:\n");
+  fprintf(stderr, "  ID: %d\n", process->id);
+  fprintf(stderr, "  Arrival Time: %d\n", process->arrival_time);
+  fprintf(stderr, "  Burst Time: %d\n", process->burst_time);
+  fprintf(stderr, "  Priority: %d\n", process->priority);
+  fprintf(stderr, "  Remaining Time: %d\n", process->remaining_time);
+  fprintf(stderr, "  Current State: %s\n",
+          process_state_to_string(process->current_state));
+}
+
+void print_sc_resource(const SC_Resource *res) {
+  fprintf(stderr, "Resource ID: %d\n", res->id);
+  fprintf(stderr, "  Counter: %d\n", res->counter);
+  fprintf(stderr, "  Max Counter: %d\n", res->max_counter);
+  fprintf(stderr, "  Action Count: %d\n", res->action_count);
+
+  for (int i = 0; i < res->action_count; ++i) {
+    fprintf(stderr, "    Action #%d:\n", i);
+    // print_sc_action(&res->actions[i]); // define this based on SC_Action
+  }
+}
 
 void SC_SyncSimulator_init(SC_SyncSimulator *simu) {}
 
@@ -1354,14 +1400,21 @@ void SC_SyncSimulator_next(SC_SyncSimulator *s) {
 void fill_name_list_helper(SC_String *content, struct SC_Arena *arena,
                            SC_StringList *list, int column, SC_Err err);
 
+void fill_processes(SC_String *file_contents, SC_StringList *process_names,
+                    SC_SyncSimulator *simulator, SC_Err err);
+
+void fill_resources(SC_String *file_contents, SC_StringList *resources_names,
+                    SC_SyncSimulator *simulator, SC_Err err);
+
 void parse_syncProcess_file(SC_String *process_file, SC_String *resource_file,
                             SC_String *actions_file,
                             struct SC_Arena *sync_arena,
+                            SC_SyncSimulator *simulator,
                             SC_StringList *process_names,
                             SC_StringList *resources_names,
                             SC_StringList *actions_names, SC_Err err) {
 
-  // FILL PROCESS NAMES, and count them
+  // GET PROCESS NAMES
   fill_name_list_helper(process_file, sync_arena, process_names, 1, err);
   if (*err != NO_ERROR) {
     return;
@@ -1399,6 +1452,46 @@ void parse_syncProcess_file(SC_String *process_file, SC_String *resource_file,
       fprintf(stderr, "%s\n", current->value.data);
     }
     current = current->next;
+  }
+
+  // ALLOCATE SIMULATION
+  simulator = SC_Arena_Alloc(sync_arena, sizeof(SC_SyncSimulator), err);
+  if (*err != NO_ERROR) {
+    return;
+  }
+
+  // PROCCESSES
+  SC_SyncProcess *proccesses = SC_Arena_Alloc(
+      sync_arena, sizeof(SC_SyncProcess) * process_names->count, err);
+  simulator->process_count = process_names->count;
+  simulator->processes = proccesses;
+
+  fill_processes(process_file, process_names, simulator, err);
+  if (*err != NO_ERROR) {
+    return;
+  }
+
+  for (int i = 0; i < simulator->process_count; ++i) {
+    SC_SyncProcess *proc = &simulator->processes[i];
+    print_sync_process(
+        proc); // or access fields like proc->id, proc->burst_time, etc.
+  }
+
+  // RESOURCES
+  SC_Resource *resources = SC_Arena_Alloc(
+      sync_arena, sizeof(SC_Resource) * resources_names->count, err);
+  simulator->resource_count = resources_names->count;
+  simulator->resources = resources;
+
+  fill_resources(resource_file, resources_names, simulator, err);
+  if (*err != NO_ERROR) {
+    return;
+  }
+
+  for (int i = 0; i < simulator->resource_count; ++i) {
+    SC_Resource *res = &simulator->resources[i];
+    print_sc_resource(
+        res); // or access fields like proc->id, proc->burst_time, etc.
   }
 }
 
@@ -1452,6 +1545,137 @@ void fill_name_list_helper(SC_String *content, struct SC_Arena *arena,
         current_column = 1;
         continue;
       }
+    }
+  }
+}
+
+void fill_processes(SC_String *file_contents, SC_StringList *process_names,
+                    SC_SyncSimulator *simulator, SC_Err err) {
+
+  const int b_max_length = 255;
+  char b_data[b_max_length]; // Max length of a column
+  SC_String buffer = {
+      .data = b_data,
+      .length = 0,
+      .data_capacity = b_max_length,
+  };
+
+  int current_column = 1;
+  int current_row = 0;
+
+  for (int i = 0; i < file_contents->length; i++) {
+
+    char current_char = SC_String_CharAt(file_contents, i);
+    switch (current_char) {
+
+    case '\n': {
+
+      if (4 != current_column) {
+        *err = INVALID_TXT_FILE;
+        return;
+      }
+
+      SC_String_TrimStart(&buffer, ' ');
+      int column_value = SC_String_ParseInt(&buffer, err);
+      if (*err != NO_ERROR) {
+        return;
+      }
+
+      simulator->processes[current_row].priority = column_value;
+      simulator->processes[current_row].id = current_row;
+      simulator->processes[current_row].current_state = STATE_READY;
+
+      buffer.length = 0;
+      current_column = 1;
+      current_row++;
+
+    } break;
+
+    case ',': {
+      if (1 != current_column) {
+        SC_String_TrimStart(&buffer, ' ');
+        int column_value = SC_String_ParseInt(&buffer, err);
+        if (*err != NO_ERROR) {
+          return;
+        }
+
+        if (2 == current_column) {
+          simulator->processes[current_row].burst_time = column_value;
+          simulator->processes[current_row].remaining_time = column_value;
+
+        } else if (3 == current_column) {
+          simulator->processes[current_row].arrival_time = column_value;
+        } else {
+          *err = INVALID_TXT_FILE;
+          return;
+        }
+      }
+
+      buffer.length = 0;
+      current_column++;
+    } break;
+    default: {
+      SC_String_AppendChar(&buffer, current_char, err);
+      if (*err != NO_ERROR) {
+        return;
+      }
+    }
+    }
+  }
+}
+
+void fill_resources(SC_String *file_contents, SC_StringList *resources_names,
+                    SC_SyncSimulator *simulator, SC_Err err) {
+
+  const int b_max_length = 255;
+  char b_data[b_max_length]; // Max length of a column
+  SC_String buffer = {
+      .data = b_data,
+      .length = 0,
+      .data_capacity = b_max_length,
+  };
+
+  int current_column = 1;
+  int current_row = 0;
+
+  for (int i = 0; i < file_contents->length; i++) {
+
+    char current_char = SC_String_CharAt(file_contents, i);
+    switch (current_char) {
+
+    case '\n': {
+
+      if (2 != current_column) {
+        *err = INVALID_TXT_FILE;
+        return;
+      }
+
+      SC_String_TrimStart(&buffer, ' ');
+      int column_value = SC_String_ParseInt(&buffer, err);
+      if (*err != NO_ERROR) {
+        return;
+      }
+
+      simulator->resources[current_row].id = current_row;
+      simulator->resources[current_row].counter = column_value;
+      simulator->resources[current_row].max_counter = column_value;
+
+      buffer.length = 0;
+      current_column = 1;
+      current_row++;
+
+    } break;
+
+    case ',': {
+      buffer.length = 0;
+      current_column++;
+    } break;
+    default: {
+      SC_String_AppendChar(&buffer, current_char, err);
+      if (*err != NO_ERROR) {
+        return;
+      }
+    }
     }
   }
 }

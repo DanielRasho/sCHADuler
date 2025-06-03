@@ -768,7 +768,7 @@ static void load_sync_files(GtkWidget *widget, gpointer data) {
   SC_StringList_Reset(&SYNC_ACTIONS_NAMES);
 
   parse_syncProcess_file(&PROCESS_FILE_CONTENT, &RESOURCES_FILE_CONTENT,
-                         &ACTIONS_FILE_CONTENT, &SYNC_SIM_ARENA,
+                         &ACTIONS_FILE_CONTENT, &SYNC_SIM_ARENA, SYNC_SIM_STATE,
                          &SYNC_PROCESS_NAMES, &SYNC_RESOURCES_NAMES,
                          &SYNC_ACTIONS_NAMES, &err);
 
@@ -1131,7 +1131,7 @@ static GtkWidget *SyncView(GtkWindow *window) {
   // step=1, digits=0
   GtkWidget *spin_button = gtk_spin_button_new(adjustment, 1, 0);
   gtk_box_append(GTK_BOX(topbar), spin_button);
-  evData->new_file_loaded.semaphore_quantity = spin_button;
+  evData->new_file_loaded.semaphore_quantity = GTK_SPIN_BUTTON(spin_button);
 
   // === Spacer to push next widgets to the right ===
   GtkWidget *spacer = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);

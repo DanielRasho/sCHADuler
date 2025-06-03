@@ -805,6 +805,68 @@ static void load_sync_files(GtkWidget *widget, gpointer data) {
   SYNC_SIM_STATE->simulation_running = SC_TRUE;
 }
 
+static void sync_handle_next_click(GtkWidget *widget, gpointer data) {
+  if (SYNC_SIM_STATE == NULL) {
+    show_alert_dialog(widget, "Error",
+                      "Simulation data has not been loaded yet!");
+    return;
+  }
+
+  if (SYNC_SIM_STATE->simulation_running == SC_FALSE) {
+    return;
+  }
+
+  if (SYNC_SIM_STATE->total_cycles >= SYNC_SIM_STATE->current_cycle + 1) {
+    SYNC_SIM_STATE->current_cycle = SYNC_SIM_STATE->current_cycle + 1;
+  } else {
+    size_t err = NO_ERROR;
+    SC_SyncSimulator_next(SYNC_SIM_STATE, &err);
+    if (err != NO_ERROR) {
+      show_alert_dialog(widget, "Error on simulation step",
+                        SC_Err_ToString(&err));
+      return;
+    }
+  }
+
+  // PRINT STATE
+
+  // UPDATE UI
+}
+
+static void sync_handle_previous_click(GtkWidget *widget, gpointer data) {
+  if (SYNC_SIM_STATE == NULL) {
+    show_alert_dialog(widget, "Error",
+                      "Simulation data has not been loaded yet!");
+    return;
+  }
+
+  if (SYNC_SIM_STATE->current_cycle - 1 >= 0) {
+    SYNC_SIM_STATE->current_cycle = SYNC_SIM_STATE->current_cycle - 1;
+  }
+
+  // PRINT STATE
+
+  // UPDATE UI
+}
+
+static void sync_handle_reset_click(GtkWidget *widget, gpointer data) {
+  if (SYNC_SIM_STATE == NULL) {
+    show_alert_dialog(widget, "Error",
+                      "Simulation data has not been loaded yet!");
+    return;
+  }
+
+  if (SYNC_SIM_STATE->current_cycle == 0) {
+    return;
+  }
+
+  SYNC_SIM_STATE->current_cycle = 0;
+
+  // PRINT STATE
+
+  // UPDATE UI
+}
+
 // ################################
 // ||                            ||
 // ||         UI BLOCKS          ||
@@ -1187,6 +1249,28 @@ static GtkWidget *SyncView(GtkWindow *window) {
   gtk_box_append(GTK_BOX(simulation), main_label);
   gtk_box_append(GTK_BOX(simulation), exit_button);
 
+  // === CONTROL BAR ===
+  GtkWidget *control_bar = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 10);
+  gtk_widget_set_halign(control_bar, GTK_ALIGN_FILL);
+  gtk_widget_set_valign(control_bar, GTK_ALIGN_START);
+  gtk_widget_add_css_class(control_bar, "control_bar");
+
+  GtkWidget *back_btn =
+      MainButton("< Back", sync_handle_previous_click, evData);
+  gtk_box_append(GTK_BOX(control_bar), back_btn);
+
+  GtkWidget *next_btn = MainButton("Next >", sync_handle_next_click, evData);
+  gtk_box_append(GTK_BOX(control_bar), next_btn);
+
+  GtkWidget *spacer2 = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
+  gtk_widget_set_hexpand(spacer2, TRUE);
+  gtk_widget_set_vexpand(spacer2, FALSE);
+  gtk_box_append(GTK_BOX(control_bar), spacer2);
+
+  GtkWidget *restart_btn =
+      MainButton("Restart", sync_handle_reset_click, restart_btn);
+  gtk_box_append(GTK_BOX(control_bar), restart_btn);
+
   // === MAIN CONTENT ===
   GtkWidget *main_box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 5);
   gtk_widget_set_halign(main_box, GTK_ALIGN_FILL);
@@ -1198,6 +1282,7 @@ static GtkWidget *SyncView(GtkWindow *window) {
   // Insert topbar at the top of the vertical box
   gtk_box_append(GTK_BOX(main_box), topbar);
   gtk_box_append(GTK_BOX(main_box), simulation);
+  gtk_box_append(GTK_BOX(main_box), control_bar);
 
   // === SPLIT VIEW ===
   GtkWidget *paned = gtk_paned_new(GTK_ORIENTATION_HORIZONTAL);

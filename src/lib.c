@@ -1460,7 +1460,7 @@ void SC_SyncSimulator_init(SC_SyncSimulator *simu) {}
  *
  * The next step should be registered on
  */
-void SC_SyncSimulator_next(SC_SyncSimulator *s) {
+void SC_SyncSimulator_next(SC_SyncSimulator *s, SC_Err err) {
   // Pseudo code (just a suggestion)
   //
   // process_visited = []

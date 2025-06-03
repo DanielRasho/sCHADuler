@@ -242,3 +242,8 @@
 .alert_popup_btn {
 	margin-top: 20px;
 }
+
+.control_bar {
+	border-top: 1px solid black;
+	padding: 10px;
+}

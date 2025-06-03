@@ -759,11 +759,23 @@ static void load_sync_files(GtkWidget *widget, gpointer data) {
     return;
   }
 
+  size_t err = NO_ERROR;
+
   // TODO: FREE TIMELINES STEP DATA
-  SC_Arena_Reset(&SYNC_SIM_STATE);
+  SC_Arena_Reset(&SYNC_SIM_ARENA);
   SC_StringList_Reset(&SYNC_PROCESS_NAMES);
   SC_StringList_Reset(&SYNC_RESOURCES_NAMES);
   SC_StringList_Reset(&SYNC_ACTIONS_NAMES);
+
+  parse_syncProcess_file(&PROCESS_FILE_CONTENT, &RESOURCES_FILE_CONTENT,
+                         &ACTIONS_FILE_CONTENT, &SYNC_SIM_ARENA,
+                         &SYNC_PROCESS_NAMES, &SYNC_RESOURCES_NAMES,
+                         &SYNC_ACTIONS_NAMES, &err);
+
+  if (err != NO_ERROR) {
+    fprintf(stderr, "Something went wrong during data parsing.\n");
+    return;
+  }
 }
 
 // ################################
@@ -1130,7 +1142,7 @@ static GtkWidget *SyncView(GtkWindow *window) {
   // "Load" Button (left)
   GtkWidget *load_button = gtk_button_new_with_label("Load Data");
   gtk_box_append(GTK_BOX(topbar), load_button);
-  g_signal_connect(load_button, "clicked", G_CALLBACK(load_sync_files), NULL);
+  g_signal_connect(load_button, "clicked", G_CALLBACK(load_sync_files), evData);
 
   // === SIMULATION ===
   GtkWidget *simulation = gtk_box_new(GTK_ORIENTATION_VERTICAL, 5);
@@ -1170,7 +1182,7 @@ static GtkWidget *SyncView(GtkWindow *window) {
   gtk_paned_set_end_child(GTK_PANED(paned), main_box);
 
   // Optional: set initial position (in pixels) for sidebar width
-  gtk_paned_set_position(GTK_PANED(paned), 400);
+  gtk_paned_set_position(GTK_PANED(paned), 200);
 
   return paned;
 }

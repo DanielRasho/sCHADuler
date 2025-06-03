@@ -1211,7 +1211,7 @@ typedef struct {
   SC_ProcessState current_state;
   /** Remaining cycles to run. */
   int remaining_time;
-  /** Indicates whether the process is currently active. */
+  /** Indicates whether the process hasn't dead yet. */
   SC_Bool is_active;
 } SC_SyncProcess;
 
@@ -1351,11 +1351,110 @@ void SC_SyncSimulator_next(SC_SyncSimulator *s) {
   //
 }
 
-void parse_syncProcess_file(SC_String *file_contents,
-                            struct SC_Arena *pids_arena,
-                            struct SC_Arena *processes_arena,
-                            SC_StringList *pid_list, SC_ProcessList *processes,
-                            SC_Err err) {}
+void fill_name_list_helper(SC_String *content, struct SC_Arena *arena,
+                           SC_StringList *list, int column, SC_Err err);
+
+void parse_syncProcess_file(SC_String *process_file, SC_String *resource_file,
+                            SC_String *actions_file,
+                            struct SC_Arena *sync_arena,
+                            SC_StringList *process_names,
+                            SC_StringList *resources_names,
+                            SC_StringList *actions_names, SC_Err err) {
+
+  // FILL PROCESS NAMES, and count them
+  fill_name_list_helper(process_file, sync_arena, process_names, 1, err);
+  if (*err != NO_ERROR) {
+    return;
+  }
+
+  fill_name_list_helper(resource_file, sync_arena, resources_names, 1, err);
+  if (*err != NO_ERROR) {
+    return;
+  }
+
+  fill_name_list_helper(actions_file, sync_arena, actions_names, 2, err);
+  if (*err != NO_ERROR) {
+    return;
+  }
+
+  struct SC_StringList_Node *current = process_names->head;
+  while (current != NULL) {
+    if (current->value.data != NULL) {
+      fprintf(stderr, "%s\n", current->value.data);
+    }
+    current = current->next;
+  }
+
+  current = resources_names->head;
+  while (current != NULL) {
+    if (current->value.data != NULL) {
+      fprintf(stderr, "%s\n", current->value.data);
+    }
+    current = current->next;
+  }
+
+  current = actions_names->head;
+  while (current != NULL) {
+    if (current->value.data != NULL) {
+      fprintf(stderr, "%s\n", current->value.data);
+    }
+    current = current->next;
+  }
+}
+
+void fill_name_list_helper(SC_String *content, struct SC_Arena *arena,
+                           SC_StringList *list, int column, SC_Err err) {
+
+  const int b_max_length = 255;
+  char b_data[b_max_length]; // Max length of a column
+  SC_String buffer = {
+      .data = b_data,
+      .length = 0,
+      .data_capacity = b_max_length,
+  };
+
+  int current_column = 1;
+
+  for (int i = 0; i < content->length; i++) {
+    char current_char = SC_String_CharAt(content, i);
+
+    if (current_column == column) {
+      if (current_char == ',' || current_char == '\n') {
+
+        SC_String_AppendChar(&buffer, 0, err);
+        if (*err != NO_ERROR) {
+          return;
+        }
+
+        SC_StringList_Append(list, arena, buffer, err);
+        if (*err != NO_ERROR) {
+          return;
+        }
+
+        // Save current
+        buffer.length = 0;
+        current_column++;
+        continue;
+      }
+
+      SC_String_AppendChar(&buffer, current_char, err);
+      if (*err != NO_ERROR) {
+        return;
+      }
+    } else {
+
+      if (current_char == ',') {
+        current_column++;
+        continue;
+      }
+
+      if (current_char == '\n') {
+        current_column = 1;
+        continue;
+      }
+    }
+  }
+}
 
 // ##################################
 // #                                #

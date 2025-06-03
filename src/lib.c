@@ -16,6 +16,7 @@ static const size_t INVALID_STRING = 7;
 static const size_t INVALID_TXT_FILE = 8;
 static const size_t RESOURCE_NOT_FOUND = 9;
 static const size_t PROCESS_NOT_FOUND = 10;
+static const size_t SLICE_EXPANSION_FAILED = 11;
 
 static const char *SC_Err_ToString(SC_Err err) {
   size_t val = *err;
@@ -39,6 +40,8 @@ static const char *SC_Err_ToString(SC_Err err) {
     return "Resource not found!";
   } else if (val == PROCESS_NOT_FOUND) {
     return "Process not found!";
+  } else if (val == SLICE_EXPANSION_FAILED) {
+    return "Slice expansion failed!";
   } else {
     return "INVALID ERROR VALUE RECEIVED!";
   }
@@ -502,11 +505,12 @@ typedef struct {
  * @param element_size Size of each element in bytes.
  * @param initial_capacity Initial number of elements the slice can hold.
  */
-void SC_Slice_init(SC_Slice *s, size_t element_size, size_t initial_capacity) {
+void SC_Slice_init(SC_Slice *s, size_t element_size, size_t initial_capacity,
+                   SC_Err err) {
   s->data = malloc(element_size * initial_capacity);
   if (!s->data) {
-    perror("malloc failed");
-    exit(1);
+    *err = MALLOC_FAILED;
+    return;
   }
   s->length = 0;
   s->capacity = initial_capacity;
@@ -520,13 +524,13 @@ void SC_Slice_init(SC_Slice *s, size_t element_size, size_t initial_capacity) {
  * @param s Pointer to the SC_Slice to append to.
  * @param element Pointer to the element to append.
  */
-void SC_Slice_append(SC_Slice *s, void *element) {
+void SC_Slice_append(SC_Slice *s, void *element, SC_Err err) {
   if (s->length == s->capacity) {
     size_t new_capacity = s->capacity * 2;
     void *new_data = malloc(s->element_size * new_capacity);
     if (!new_data) {
-      perror("realloc failed");
-      exit(1);
+      *err = SLICE_EXPANSION_FAILED;
+      return;
     }
 
     memcpy(new_data, s->data, s->element_size * s->length);
@@ -1341,7 +1345,7 @@ typedef struct {
   int action_id;
   /** ID of the resource used, or -1 if none. */
   int resource_id;
-} ProcessTimelineEntry;
+} SC_ProcessTimelineEntry;
 
 /**
  * Represents the execution history of a process.
@@ -1354,7 +1358,7 @@ typedef struct {
    * Automatically grows as new entries are appended.
    */
   SC_Slice entries;
-} ProcessTimeline;
+} SC_ProcessTimeline;
 
 /**
  * Represents the full state of the simulation.
@@ -1370,7 +1374,7 @@ typedef struct {
   int resource_count;
 
   /** One timeline per process, tracking its execution history. */
-  ProcessTimeline *process_timelines;
+  SC_ProcessTimeline *process_timelines;
   int timeline_count;
 
   /** Current simulation cycle. */
@@ -1588,12 +1592,28 @@ void parse_syncProcess_file(SC_String *process_file, SC_String *resource_file,
     print_sc_resource(res);
   }
 
+  // ACTIONS
   fill_actions(actions_file, sync_arena, resources_names, process_names,
                actions_names, simulator, err);
 
   for (int i = 0; i < simulator->resource_count; ++i) {
     SC_Resource *res = &simulator->resources[i];
     print_sc_resource(res);
+  }
+
+  // TIMELINES
+  SC_ProcessTimeline *timelines = SC_Arena_Alloc(
+      sync_arena, sizeof(SC_ProcessTimeline) * simulator->process_count, err);
+  simulator->process_timelines = timelines;
+  simulator->timeline_count = simulator->process_count;
+
+  // TIMELINES ENTRIES
+  for (int i = 0; i < simulator->timeline_count; ++i) {
+    SC_Slice_init(&simulator->process_timelines[i].entries,
+                  sizeof(SC_ProcessTimelineEntry), 8, err);
+    if (*err != NO_ERROR) {
+      return;
+    }
   }
 }
 

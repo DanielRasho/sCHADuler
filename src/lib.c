@@ -1414,9 +1414,9 @@ const char *process_state_to_string(SC_ProcessState state) {
   case STATE_READY:
     return "READY";
   case STATE_ACCESSED:
-    return "ACCESSED";
+    return "ACCESING";
   case STATE_COMPUTING:
-    return "COMPUTING";
+    return "RUNNING";
   case STATE_WAITING:
     return "WAITING";
   case STATE_FINISHED:

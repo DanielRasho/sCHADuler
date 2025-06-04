@@ -278,39 +278,70 @@ static void sync_update_sim_canvas(SC_SyncUpdateSimCanvas params, SC_Err err) {
   }
 
   GtkWidget *grid = gtk_grid_new();
-  gtk_grid_set_row_spacing(GTK_GRID(grid), 8);
-  gtk_grid_set_column_spacing(GTK_GRID(grid), 8);
+  // gtk_grid_set_row_spacing(GTK_GRID(grid), 8);
+  // gtk_grid_set_column_spacing(GTK_GRID(grid), 8);
   gtk_widget_set_hexpand(grid, FALSE);
   gtk_widget_set_vexpand(grid, TRUE);
   gtk_widget_set_halign(grid, GTK_ALIGN_CENTER);
   gtk_widget_set_valign(grid, GTK_ALIGN_FILL);
 
-  int column_count = 3;
-  int row_count = 5;
+  GtkWidget *corner_label = gtk_label_new("Cycle");
+  gtk_grid_attach(GTK_GRID(grid), corner_label, 0, 0, 1, 1);
+  gtk_widget_add_css_class(corner_label, "table_column_corner");
 
-  // Add column headers
-  for (int c = 0; c <= column_count; ++c) {
+  // RENDER COLUMN HEADERS
+  for (int c = 1; c <= SYNC_SIM_STATE->current_cycle; ++c) {
     char label_text[16];
-    if (c == 0)
-      snprintf(label_text, sizeof(label_text), "CYCLE");
-    else
-      snprintf(label_text, sizeof(label_text), "%d", c);
-
+    snprintf(label_text, sizeof(label_text), "%d", c);
     GtkWidget *label = gtk_label_new(label_text);
     gtk_grid_attach(GTK_GRID(grid), label, c, 0, 1, 1);
+    gtk_widget_add_css_class(label, "table_column_header");
   }
 
-  // Add row headers and cells
-  for (int r = 1; r <= row_count; ++r) {
-    char pid_label[16];
-    snprintf(pid_label, sizeof(pid_label), "PID%d", r);
-    GtkWidget *row_label = gtk_label_new(pid_label);
-    gtk_grid_attach(GTK_GRID(grid), row_label, 0, r, 1, 1);
+  // RENDER ROW HEADERS
+  for (int i = 0; i < SYNC_SIM_STATE->process_count; ++i) {
+    SC_String process_name = SC_StringList_GetAt(&SYNC_PROCESS_NAMES, i, err);
+    GtkWidget *row_label = gtk_label_new(process_name.data);
+    gtk_grid_attach(GTK_GRID(grid), row_label, 0, i + 1, 1, 1);
+    gtk_widget_add_css_class(row_label, "table_row_header");
+  }
 
-    for (int c = 1; c <= column_count; ++c) {
-      GtkWidget *cell =
-          gtk_label_new("Alohaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"); // or any content
-      gtk_grid_attach(GTK_GRID(grid), cell, c, r, 1, 1);
+  // RENDER ROW CONTENT
+  for (int i = 0; i < SYNC_SIM_STATE->timeline_count; ++i) {
+    SC_Slice entries = SYNC_SIM_STATE->process_timelines[i].entries;
+
+    SC_ProcessTimelineEntry *entry = (SC_ProcessTimelineEntry *)entries.data;
+
+    for (size_t i = 0; i < entries.length; i++) {
+
+      char label_class[20];
+
+      switch (entry->state) {
+
+      case STATE_READY: {
+        snprintf(label_class, sizeof(label_class), "pid_14");
+      } break;
+      case STATE_ACCESSED: {
+        snprintf(label_class, sizeof(label_class), "pid_22");
+      } break;
+      case STATE_COMPUTING: {
+        snprintf(label_class, sizeof(label_class), "pid_43");
+      } break;
+      case STATE_WAITING: {
+        snprintf(label_class, sizeof(label_class), "pid_3");
+      } break;
+      case STATE_FINISHED: {
+        snprintf(label_class, sizeof(label_class), "pid_49");
+      } break;
+      default: {
+        snprintf(label_class, sizeof(label_class), "pid_0");
+      } break;
+        ;
+      }
+
+      GtkWidget *label = gtk_label_new(process_state_to_string(entry->state));
+      gtk_widget_add_css_class(label, "table_cell");
+      gtk_widget_add_css_class(label, label_class);
     }
   }
 
@@ -453,10 +484,6 @@ static void bind_avg_waiting_time_cb(GtkSignalListItemFactory *factory,
 // ||          HANDLERS          ||
 // ||                            ||
 // ################################
-
-static void print_hello(GtkWidget *widget, gpointer data) {
-  g_print("Hello World\n");
-}
 
 static void change_algorithm_to_first_in_first_out(GtkCheckButton *self,
                                                    gpointer *data) {
@@ -716,9 +743,6 @@ static void handle_reset_click(GtkWidget *widget, gpointer data) {
 static void sync_file_dialog_finished(GObject *source_object, GAsyncResult *res,
                                       gpointer data, SC_String *file_contents,
                                       GtkTextBuffer *buffer) {
-  SC_SyncGlobalEventData *global_ev_data = (SC_SyncGlobalEventData *)data;
-  SC_SyncLoadedNewFileData ev_data = global_ev_data->new_file_loaded;
-
   GError **error = NULL;
   GFile *file =
       gtk_file_dialog_open_finish(GTK_FILE_DIALOG(source_object), res, error);
@@ -888,6 +912,10 @@ static void sync_handle_next_click(GtkWidget *widget, gpointer data) {
   // PRINT STATE
 
   // UPDATE UI
+
+  size_t err = NO_ERROR;
+  SC_SyncGlobalEventData *ev_data = (SC_SyncGlobalEventData *)data;
+  sync_update_sim_canvas(ev_data->update_sim_canvas, &err);
 }
 
 static void sync_handle_previous_click(GtkWidget *widget, gpointer data) {
@@ -907,6 +935,9 @@ static void sync_handle_previous_click(GtkWidget *widget, gpointer data) {
   // PRINT STATE
 
   // UPDATE UI
+  size_t err = NO_ERROR;
+  SC_SyncGlobalEventData *ev_data = (SC_SyncGlobalEventData *)data;
+  sync_update_sim_canvas(ev_data->update_sim_canvas, &err);
 }
 
 static void sync_handle_reset_click(GtkWidget *widget, gpointer data) {
@@ -926,6 +957,9 @@ static void sync_handle_reset_click(GtkWidget *widget, gpointer data) {
   // PRINT STATE
 
   // UPDATE UI
+  size_t err = NO_ERROR;
+  SC_SyncGlobalEventData *ev_data = (SC_SyncGlobalEventData *)data;
+  sync_update_sim_canvas(ev_data->update_sim_canvas, &err);
 }
 
 // ################################
@@ -1312,7 +1346,7 @@ static GtkWidget *SyncView(GtkWindow *window) {
   gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(simulation_scroller),
                                  GTK_POLICY_AUTOMATIC, GTK_POLICY_AUTOMATIC);
 
-  evData->update_sim_canvas.container = simulation;
+  evData->update_sim_canvas.container = GTK_BOX(simulation);
 
   // === CONTROL BAR ===
   GtkWidget *control_bar = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 10);
@@ -1333,7 +1367,7 @@ static GtkWidget *SyncView(GtkWindow *window) {
   gtk_box_append(GTK_BOX(control_bar), spacer2);
 
   GtkWidget *restart_btn =
-      MainButton("Restart", sync_handle_reset_click, restart_btn);
+      MainButton("Restart", sync_handle_reset_click, evData);
   gtk_box_append(GTK_BOX(control_bar), restart_btn);
 
   // === MAIN CONTENT ===
@@ -1446,22 +1480,6 @@ int main(int argc, char **argv) {
   SC_StringList_Init(&SYNC_PROCESS_NAMES);
   SC_StringList_Init(&SYNC_RESOURCES_NAMES);
   SC_StringList_Init(&SYNC_ACTIONS_NAMES);
-
-  static SC_String PROCESS_FILE_CONTENT = {
-      .length = 0,
-      .data = NULL,
-      .data_capacity = 0,
-  };
-  static SC_String RESOURCES_FILE_CONTENT = {
-      .length = 0,
-      .data = NULL,
-      .data_capacity = 0,
-  };
-  static SC_String ACTIONS_FILE_CONTENT = {
-      .length = 0,
-      .data = NULL,
-      .data_capacity = 0,
-  };
 
   SC_Arena_Init(&SYNC_SIM_ARENA,
                 sizeof(SC_SyncSimulator) +

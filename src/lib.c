@@ -968,7 +968,7 @@ void simulate_round_robin(SC_ProcessList *processes, SC_Simulation *sim,
   if (!processes || !sim || processes->count == 0 || quantum <= 0)
     return;
 
-  SC_ProcessList_sort(processes, compare_by_arrival_time);
+  // SC_ProcessList_sort(processes, compare_by_arrival_time);
   int totalBurstTime = SC_Total_busrt_time(processes) + 1;
   int n = processes->count;
 

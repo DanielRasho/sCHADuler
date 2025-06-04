@@ -4,6 +4,20 @@
 #include <stdlib.h>
 #include <string.h>
 
+// ################################
+// ||                            ||
+// ||          UTILITIES         ||
+// ||                            ||
+// ################################
+
+static int SC_Min(int a, int b) { return a < b ? a : b; }
+
+// ################################
+// ||                            ||
+// ||           ERRORS           ||
+// ||                            ||
+// ################################
+
 typedef unsigned int uint;
 typedef size_t *SC_Err;
 static const size_t NO_ERROR = 1;
@@ -1461,6 +1475,21 @@ void print_sc_resource(const SC_Resource *res) {
 
 void SC_SyncSimulator_init(SC_SyncSimulator *simu) {}
 
+void sort_int_by_action_priority(int *indices, size_t length,
+                                 const SC_Action *actions) {
+  for (size_t i = 1; i < length; i++) {
+    int key = indices[i];
+    int key_priority = actions[key].priority;
+    size_t j = i;
+
+    while (j > 0 && actions[indices[j - 1]].priority > key_priority) {
+      indices[j] = indices[j - 1];
+      j--;
+    }
+    indices[j] = key;
+  }
+}
+
 /**
  * Takes a Simulation objects and computes its next step inplace
  *
@@ -1510,6 +1539,69 @@ void SC_SyncSimulator_next(SC_SyncSimulator *s, SC_Err err) {
   }
 
   // SET WAITING AND PROCCESSED STATES
+
+  int max_syncronization_count =
+      s->sync_type == SYNC_MUTEX ? 1 : s->semaphore_count;
+
+  for (int r = 0; r < s->resource_count; r++) {
+    SC_Resource *resource = &s->resources[r];
+    SC_Slice actions_in_cycle;
+    SC_Slice_init(&actions_in_cycle, sizeof(int), s->process_count, err);
+    if (*err != NO_ERROR) {
+      return;
+    }
+
+    for (int i = 0; i < resource->action_count; i++) {
+      SC_Action *action = &resource->actions[i];
+      if (action->cycle == next_cycle) {
+        SC_Slice_append(&actions_in_cycle, &i, err);
+      }
+    }
+
+    sort_int_by_action_priority(actions_in_cycle.data, actions_in_cycle.length,
+                                resource->actions);
+
+    for (int i = 0; i < actions_in_cycle.length; i++) {
+      int *index = (int *)actions_in_cycle.data + i;
+      fprintf(stderr, "SORTED %d\n", resource->actions[*index].pid);
+    }
+    fprintf(stderr, "=============\n");
+
+    int limit = SC_Min(max_syncronization_count, resource->max_counter);
+
+    for (int i = 0; i < actions_in_cycle.length; i++) {
+      int *action_index = (int *)actions_in_cycle.data + i;
+
+      SC_Action *action = &resource->actions[*action_index];
+      SC_Slice *entries = &s->process_timelines[action->pid].entries;
+
+      //  if are resources available
+      if (resource->max_counter - resource->counter < limit) {
+        resource->counter--;
+        s->processes[action->pid].current_state = STATE_ACCESSED;
+        s->processes[action->pid].burst_time--;
+        SC_ProcessTimelineEntry entry = {.state = STATE_ACCESSED,
+                                         .action_id = action->id,
+                                         .resource_id = resource->id};
+        SC_Slice_append(entries, &entry, err);
+
+        visited_processes[action->pid] = 1;
+      } else {
+        s->processes[action->pid].current_state = STATE_WAITING;
+        action->cycle++;
+        SC_ProcessTimelineEntry entry = {.state = STATE_WAITING,
+                                         .action_id = action->id,
+                                         .resource_id = resource->id};
+        SC_Slice_append(entries, &entry, err);
+
+        visited_processes[action->pid] = 1;
+      }
+    }
+
+    resource->counter = resource->max_counter;
+
+    SC_Slice_deinit(&actions_in_cycle);
+  }
 
   // SET STARTING PROCESSES
   for (int i = 0; i < s->process_count; i++) {
@@ -1563,33 +1655,6 @@ void SC_SyncSimulator_next(SC_SyncSimulator *s, SC_Err err) {
   s->current_cycle += 1;
   s->total_cycles += 1;
 
-  // Pseudo code (just a suggestion)
-  //
-  // process_visited = []
-  //
-  // for each resources:
-  //    actions = []
-  //
-  //    for a in actions:
-  //      if a in this cycle => actions.append(a)
-  //      else => continue
-  //
-  //    while len(consumed_actions) != len(actions):
-  //      a = find_nex_action_with_highest_priority()
-  //
-  //      if simulation.mode = MUTEX and consumed_resource != 1:
-  //        resources_count--
-  //      if simulation.mode = SEMAPHORE and consumed_resource != n:
-  //        resources_count--
-  //
-  //      p.status = STATE_ACCESSED
-  //      a.states = finished
-  //
-  // for each process:
-  //    if not action executed:
-  //      p.STATUS = COMPUTING
-  //
-  // reset_resource_counters()
   //
 }
 
@@ -1886,6 +1951,7 @@ void fill_resources(SC_String *file_contents, SC_StringList *resources_names,
       simulator->resources[current_row].id = current_row;
       simulator->resources[current_row].counter = column_value;
       simulator->resources[current_row].max_counter = column_value;
+      simulator->resources[current_row].action_count = 0;
 
       buffer.length = 0;
       current_column = 1;
@@ -1947,6 +2013,10 @@ void fill_actions(SC_String *file_contents, struct SC_Arena *sync_arena,
 
   int actions_resource_index[actions_names->count];
   int actions_index_in_resource[actions_names->count];
+
+  if (file_contents->length == 0) {
+    return;
+  }
 
   // COUNT ACTIONS PER RESOURCE
 

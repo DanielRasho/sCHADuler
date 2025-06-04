@@ -1575,6 +1575,12 @@ void SC_SyncSimulator_next(SC_SyncSimulator *s, SC_Err err) {
       SC_Action *action = &resource->actions[*action_index];
       SC_Slice *entries = &s->process_timelines[action->pid].entries;
 
+      // If process has already post-pon it
+      if (visited_processes[action->pid] == 1) {
+        action->cycle++;
+        continue;
+      }
+
       //  if are resources available
       if (resource->max_counter - resource->counter < limit) {
         resource->counter--;

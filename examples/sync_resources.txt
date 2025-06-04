@@ -1,2 +1,3 @@
 ram1,3
 ram2,2
+monitor,3

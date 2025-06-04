@@ -1540,6 +1540,9 @@ void SC_SyncSimulator_next(SC_SyncSimulator *s, SC_Err err) {
 
   // SET WAITING AND PROCCESSED STATES
 
+  int max_syncronization_count =
+      s->sync_type == SYNC_MUTEX ? 1 : s->semaphore_count;
+
   for (int r = 0; r < s->resource_count; r++) {
     SC_Resource *resource = &s->resources[r];
     SC_Slice actions_in_cycle;
@@ -1564,9 +1567,41 @@ void SC_SyncSimulator_next(SC_SyncSimulator *s, SC_Err err) {
     }
     fprintf(stderr, "=============\n");
 
+    int limit = SC_Min(max_syncronization_count, resource->max_counter);
+
+    for (int i = 0; i < actions_in_cycle.length; i++) {
+      int *action_index = (int *)actions_in_cycle.data + i;
+
+      SC_Action *action = &resource->actions[*action_index];
+      SC_Slice *entries = &s->process_timelines[action->pid].entries;
+
+      //  if are resources available
+      if (resource->max_counter - resource->counter < limit) {
+        resource->counter--;
+        s->processes[action->pid].current_state = STATE_ACCESSED;
+        s->processes[action->pid].burst_time--;
+        SC_ProcessTimelineEntry entry = {.state = STATE_ACCESSED,
+                                         .action_id = action->id,
+                                         .resource_id = resource->id};
+        SC_Slice_append(entries, &entry, err);
+
+        visited_processes[action->pid] = 1;
+      } else {
+        s->processes[action->pid].current_state = STATE_WAITING;
+        action->cycle++;
+        SC_ProcessTimelineEntry entry = {.state = STATE_WAITING,
+                                         .action_id = action->id,
+                                         .resource_id = resource->id};
+        SC_Slice_append(entries, &entry, err);
+
+        visited_processes[action->pid] = 1;
+      }
+    }
+
+    resource->counter = resource->max_counter;
+
     SC_Slice_deinit(&actions_in_cycle);
   }
-  fprintf(stderr, "#################\n");
 
   // SET STARTING PROCESSES
   for (int i = 0; i < s->process_count; i++) {
@@ -1620,35 +1655,6 @@ void SC_SyncSimulator_next(SC_SyncSimulator *s, SC_Err err) {
   s->current_cycle += 1;
   s->total_cycles += 1;
 
-  int max_resource_count = s->sync_type == SYNC_MUTEX ? 1 : s->semaphore_count;
-
-  // Pseudo code (just a suggestion)
-  //
-  // process_visited = []
-  //
-  // for each resources:
-  //    actions = []
-  //
-  //    for a in actions:
-  //      if a in this cycle => actions.append(a)
-  //      else => continue
-  //
-  //    while len(consumed_actions) != len(actions):
-  //      a = find_nex_action_with_highest_priority()
-  //
-  //      if simulation.mode = MUTEX and consumed_resource != 1:
-  //        resources_count--
-  //      if simulation.mode = SEMAPHORE and consumed_resource != n:
-  //        resources_count--
-  //
-  //      p.status = STATE_ACCESSED
-  //      a.states = finished
-  //
-  // for each process:
-  //    if not action executed:
-  //      p.STATUS = COMPUTING
-  //
-  // reset_resource_counters()
   //
 }
 

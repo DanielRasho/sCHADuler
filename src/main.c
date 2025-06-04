@@ -313,7 +313,7 @@ static void sync_update_sim_canvas(SC_SyncUpdateSimCanvas params, SC_Err err) {
     SC_ProcessTimelineEntry *entry =
         (SC_ProcessTimelineEntry *)entriesSlice.data;
 
-    for (size_t j = 0; j < entriesSlice.length; j++) {
+    for (size_t j = 0; j < SYNC_SIM_STATE->current_cycle; j++) {
 
       char label_class[20];
 

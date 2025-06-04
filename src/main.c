@@ -65,7 +65,12 @@ typedef struct {
 } SC_SyncLoadedNewFileData;
 
 typedef struct {
+  GtkBox *container;
+} SC_SyncUpdateSimCanvas;
+
+typedef struct {
   SC_SyncLoadedNewFileData new_file_loaded;
+  SC_SyncUpdateSimCanvas update_sim_canvas;
 } SC_SyncGlobalEventData;
 
 // ################################
@@ -262,6 +267,54 @@ static void update_sim_canvas(SC_UpdateSimCanvasData params, SC_Err err) {
       }
     }
   }
+}
+
+static void sync_update_sim_canvas(SC_SyncUpdateSimCanvas params, SC_Err err) {
+
+  GtkWidget *widget;
+  while ((widget = gtk_widget_get_first_child(GTK_WIDGET(params.container))) !=
+         NULL) {
+    gtk_box_remove(params.container, widget);
+  }
+
+  GtkWidget *grid = gtk_grid_new();
+  gtk_grid_set_row_spacing(GTK_GRID(grid), 8);
+  gtk_grid_set_column_spacing(GTK_GRID(grid), 8);
+  gtk_widget_set_hexpand(grid, FALSE);
+  gtk_widget_set_vexpand(grid, TRUE);
+  gtk_widget_set_halign(grid, GTK_ALIGN_CENTER);
+  gtk_widget_set_valign(grid, GTK_ALIGN_FILL);
+
+  int column_count = 3;
+  int row_count = 5;
+
+  // Add column headers
+  for (int c = 0; c <= column_count; ++c) {
+    char label_text[16];
+    if (c == 0)
+      snprintf(label_text, sizeof(label_text), "CYCLE");
+    else
+      snprintf(label_text, sizeof(label_text), "%d", c);
+
+    GtkWidget *label = gtk_label_new(label_text);
+    gtk_grid_attach(GTK_GRID(grid), label, c, 0, 1, 1);
+  }
+
+  // Add row headers and cells
+  for (int r = 1; r <= row_count; ++r) {
+    char pid_label[16];
+    snprintf(pid_label, sizeof(pid_label), "PID%d", r);
+    GtkWidget *row_label = gtk_label_new(pid_label);
+    gtk_grid_attach(GTK_GRID(grid), row_label, 0, r, 1, 1);
+
+    for (int c = 1; c <= column_count; ++c) {
+      GtkWidget *cell =
+          gtk_label_new("Alohaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"); // or any content
+      gtk_grid_attach(GTK_GRID(grid), cell, c, r, 1, 1);
+    }
+  }
+
+  gtk_box_append(GTK_BOX(params.container), grid);
 }
 
 void show_alert_dialog(GtkWidget *parent_widget, const char *title,
@@ -803,6 +856,8 @@ static void load_sync_files(GtkWidget *widget, gpointer data) {
   SYNC_SIM_STATE->current_cycle = 0;
   SYNC_SIM_STATE->total_cycles = 0;
   SYNC_SIM_STATE->simulation_running = SC_TRUE;
+
+  sync_update_sim_canvas(ev_data->update_sim_canvas, &err);
 }
 
 static void sync_handle_next_click(GtkWidget *widget, gpointer data) {
@@ -815,6 +870,8 @@ static void sync_handle_next_click(GtkWidget *widget, gpointer data) {
   if (SYNC_SIM_STATE->simulation_running == SC_FALSE) {
     return;
   }
+
+  fprintf(stderr, "MOVING NEXT \n");
 
   if (SYNC_SIM_STATE->total_cycles >= SYNC_SIM_STATE->current_cycle + 1) {
     SYNC_SIM_STATE->current_cycle = SYNC_SIM_STATE->current_cycle + 1;
@@ -840,9 +897,12 @@ static void sync_handle_previous_click(GtkWidget *widget, gpointer data) {
     return;
   }
 
-  if (SYNC_SIM_STATE->current_cycle - 1 >= 0) {
-    SYNC_SIM_STATE->current_cycle = SYNC_SIM_STATE->current_cycle - 1;
+  if (SYNC_SIM_STATE->current_cycle - 1 < 0) {
+    return;
   }
+
+  fprintf(stderr, "MOVING PREVIOUS \n");
+  SYNC_SIM_STATE->current_cycle = SYNC_SIM_STATE->current_cycle - 1;
 
   // PRINT STATE
 
@@ -860,6 +920,7 @@ static void sync_handle_reset_click(GtkWidget *widget, gpointer data) {
     return;
   }
 
+  fprintf(stderr, "RESETING SIMULATION\n");
   SYNC_SIM_STATE->current_cycle = 0;
 
   // PRINT STATE
@@ -1242,12 +1303,16 @@ static GtkWidget *SyncView(GtkWindow *window) {
   gtk_widget_add_css_class(
       simulation, "simulation"); // was incorrectly added to `topbar` earlier
 
-  GtkWidget *main_label = gtk_label_new("Main Content");
-  GtkWidget *exit_button = gtk_button_new_with_label("Goodbye world!");
-  g_signal_connect(exit_button, "clicked", G_CALLBACK(print_hello), NULL);
+  // Wrap it in a scrolled window
+  GtkWidget *simulation_scroller = gtk_scrolled_window_new();
+  gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(simulation_scroller),
+                                simulation);
 
-  gtk_box_append(GTK_BOX(simulation), main_label);
-  gtk_box_append(GTK_BOX(simulation), exit_button);
+  // Optionally configure scroll policies
+  gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(simulation_scroller),
+                                 GTK_POLICY_AUTOMATIC, GTK_POLICY_AUTOMATIC);
+
+  evData->update_sim_canvas.container = simulation;
 
   // === CONTROL BAR ===
   GtkWidget *control_bar = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 10);
@@ -1281,7 +1346,7 @@ static GtkWidget *SyncView(GtkWindow *window) {
 
   // Insert topbar at the top of the vertical box
   gtk_box_append(GTK_BOX(main_box), topbar);
-  gtk_box_append(GTK_BOX(main_box), simulation);
+  gtk_box_append(GTK_BOX(main_box), simulation_scroller);
   gtk_box_append(GTK_BOX(main_box), control_bar);
 
   // === SPLIT VIEW ===

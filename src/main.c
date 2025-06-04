@@ -5,7 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-// ################################
+// ################################/
 // ||                            ||
 // ||         CONSTANTS          ||
 // ||                            ||
@@ -310,18 +310,16 @@ static void sync_update_sim_canvas(SC_SyncUpdateSimCanvas params, SC_Err err) {
   for (int i = 0; i < SYNC_SIM_STATE->timeline_count; ++i) {
     SC_Slice entriesSlice = SYNC_SIM_STATE->process_timelines[i].entries;
 
-    SC_ProcessTimelineEntry *entry =
+    SC_ProcessTimelineEntry *entries =
         (SC_ProcessTimelineEntry *)entriesSlice.data;
 
-    int num_cycles = SYNC_SIM_STATE->current_cycle > entriesSlice.length
-                         ? entriesSlice.length
-                         : SYNC_SIM_STATE->current_cycle;
+    int num_cycles = SC_Min(SYNC_SIM_STATE->current_cycle, entriesSlice.length);
 
     for (size_t j = 0; j < num_cycles; j++) {
 
       char label_class[20];
 
-      switch (entry[j].state) {
+      switch (entries[j].state) {
       case STATE_READY: {
         snprintf(label_class, sizeof(label_class), "pid_14");
       } break;
@@ -343,7 +341,8 @@ static void sync_update_sim_canvas(SC_SyncUpdateSimCanvas params, SC_Err err) {
         ;
       }
 
-      GtkWidget *label = gtk_label_new(process_state_to_string(entry[j].state));
+      GtkWidget *label =
+          gtk_label_new(process_state_to_string(entries[j].state));
       gtk_widget_add_css_class(label, "table_cell");
       gtk_widget_add_css_class(label, label_class);
 
@@ -835,8 +834,7 @@ static void sync_handle_load_actions(GtkWidget *widget, gpointer data) {
 static void load_sync_files(GtkWidget *widget, gpointer data) {
 
   SC_SyncGlobalEventData *ev_data = (SC_SyncGlobalEventData *)data;
-  if (PROCESS_FILE_CONTENT.length == 0 || RESOURCES_FILE_CONTENT.length == 0 ||
-      ACTIONS_FILE_CONTENT.length == 0) {
+  if (PROCESS_FILE_CONTENT.length == 0 || RESOURCES_FILE_CONTENT.length == 0) {
     // Create and show an alert dialog
     show_alert_dialog(widget, "Missing Files",
                       "One or more required files are missing.");
@@ -894,10 +892,6 @@ static void sync_handle_next_click(GtkWidget *widget, gpointer data) {
   if (SYNC_SIM_STATE == NULL) {
     show_alert_dialog(widget, "Error",
                       "Simulation data has not been loaded yet!");
-    return;
-  }
-
-  if (SYNC_SIM_STATE->simulation_running == SC_FALSE) {
     return;
   }
 

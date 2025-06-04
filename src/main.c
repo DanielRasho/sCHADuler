@@ -308,16 +308,16 @@ static void sync_update_sim_canvas(SC_SyncUpdateSimCanvas params, SC_Err err) {
 
   // RENDER ROW CONTENT
   for (int i = 0; i < SYNC_SIM_STATE->timeline_count; ++i) {
-    SC_Slice entries = SYNC_SIM_STATE->process_timelines[i].entries;
+    SC_Slice entriesSlice = SYNC_SIM_STATE->process_timelines[i].entries;
 
-    SC_ProcessTimelineEntry *entry = (SC_ProcessTimelineEntry *)entries.data;
+    SC_ProcessTimelineEntry *entry =
+        (SC_ProcessTimelineEntry *)entriesSlice.data;
 
-    for (size_t i = 0; i < entries.length; i++) {
+    for (size_t j = 0; j < entriesSlice.length; j++) {
 
       char label_class[20];
 
-      switch (entry->state) {
-
+      switch (entry[j].state) {
       case STATE_READY: {
         snprintf(label_class, sizeof(label_class), "pid_14");
       } break;
@@ -339,9 +339,11 @@ static void sync_update_sim_canvas(SC_SyncUpdateSimCanvas params, SC_Err err) {
         ;
       }
 
-      GtkWidget *label = gtk_label_new(process_state_to_string(entry->state));
+      GtkWidget *label = gtk_label_new(process_state_to_string(entry[j].state));
       gtk_widget_add_css_class(label, "table_cell");
       gtk_widget_add_css_class(label, label_class);
+
+      gtk_grid_attach(GTK_GRID(grid), label, j + 1, i + 1, 1, 1);
     }
   }
 

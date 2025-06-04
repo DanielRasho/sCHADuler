@@ -528,7 +528,7 @@ void SC_Slice_append(SC_Slice *s, void *element, SC_Err err) {
   if (s->length == s->capacity) {
     size_t new_capacity = s->capacity * 2;
     void *new_data = malloc(s->element_size * new_capacity);
-    if (!new_data) {
+    if (new_data == NULL) {
       *err = SLICE_EXPANSION_FAILED;
       return;
     }
@@ -1461,6 +1461,26 @@ void SC_SyncSimulator_init(SC_SyncSimulator *simu) {}
  * The next step should be registered on
  */
 void SC_SyncSimulator_next(SC_SyncSimulator *s, SC_Err err) {
+
+  // int visited_processes[s->process_count];
+  // for (int i = 0; i < s->process_count; i++) {
+  //   visited_processes[i] = -1;
+  // }
+
+  for (int i = 0; i < s->process_count; i++) {
+    SC_Slice *entries = &s->process_timelines[i].entries;
+
+    SC_ProcessTimelineEntry entry = {
+        .state = STATE_COMPUTING, .action_id = 1, .resource_id = 1};
+    SC_Slice_append(entries, &entry, err);
+    if (*err != NO_ERROR) {
+      return;
+    }
+  }
+
+  s->current_cycle += 1;
+  s->total_cycles += 1;
+
   // Pseudo code (just a suggestion)
   //
   // process_visited = []

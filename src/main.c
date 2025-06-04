@@ -341,8 +341,26 @@ static void sync_update_sim_canvas(SC_SyncUpdateSimCanvas params, SC_Err err) {
         ;
       }
 
-      GtkWidget *label =
-          gtk_label_new(process_state_to_string(entries[j].state));
+      GtkWidget *label;
+
+      if (entries[j].state == STATE_ACCESSED ||
+          entries[j].state == STATE_WAITING) {
+        SC_String resource_name = SC_StringList_GetAt(
+            &SYNC_RESOURCES_NAMES, entries[j].resource_id, err);
+
+        SC_String action_name =
+            SC_StringList_GetAt(&SYNC_ACTIONS_NAMES, entries[j].action_id, err);
+
+        char label_text[256];
+        snprintf(label_text, sizeof(label_text), "%s %s %s",
+                 process_state_to_string(entries[j].state), resource_name.data,
+                 action_name.data);
+
+        label = gtk_label_new(label_text);
+      } else {
+        label = gtk_label_new(process_state_to_string(entries[j].state));
+      }
+
       gtk_widget_add_css_class(label, "table_cell");
       gtk_widget_add_css_class(label, label_class);
 

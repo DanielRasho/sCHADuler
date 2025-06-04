@@ -26,7 +26,22 @@ All commands to develop on this project must be run on the shell created by
 `nix develop`. Please install [Nix](https://nixos.org/download/) and enable
 [Flakes](https://nixos.wiki/wiki/Flakes).
 
-You only need the clang compiler to run this project.
+So if you have Nix simply type:
+
+```bash
+nix develop
+```
+
+This will enter you into a shell with all the required dependencies to run the
+project.
+
+If you don't have Nix installed on your system, you'll need to install the
+dependencies manually:
+
+- clang
+- GTK4
+- pkg-config
+- bear (https://github.com/rizsotto/Bear)
 
 First compile the `./nob.c` file into an executable like `nob`:
 

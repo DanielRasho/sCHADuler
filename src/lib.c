@@ -1292,7 +1292,6 @@ typedef struct {
   SC_ProcessState current_state;
   /** Remaining cycles to run. */
   int remaining_time;
-
 } SC_SyncProcess;
 
 /**
@@ -1462,21 +1461,95 @@ void SC_SyncSimulator_init(SC_SyncSimulator *simu) {}
  */
 void SC_SyncSimulator_next(SC_SyncSimulator *s, SC_Err err) {
 
-  // int visited_processes[s->process_count];
-  // for (int i = 0; i < s->process_count; i++) {
-  //   visited_processes[i] = -1;
-  // }
+  int next_cycle = s->current_cycle + 1;
 
+  int visited_processes[s->process_count];
   for (int i = 0; i < s->process_count; i++) {
-    SC_Slice *entries = &s->process_timelines[i].entries;
+    visited_processes[i] = 0;
+  }
 
-    SC_ProcessTimelineEntry entry = {
-        .state = STATE_COMPUTING, .action_id = 1, .resource_id = 1};
-    SC_Slice_append(entries, &entry, err);
-    if (*err != NO_ERROR) {
-      return;
+  // CHECK IF SIMULATION ENDED
+  int proc_finished = 0;
+  for (int i = 0; i < s->process_count; i++) {
+    SC_SyncProcess *process = &s->processes[i];
+    if (process->current_state == STATE_FINISHED) {
+      proc_finished++;
     }
   }
+  if (proc_finished == s->process_count) {
+    s->simulation_running = SC_FALSE;
+    return;
+  }
+
+  // SET FINISHED PROCESSES
+  for (int i = 0; i < s->process_count; i++) {
+    SC_SyncProcess *process = &s->processes[i];
+    if (process->burst_time == 0) {
+      process->current_state = STATE_FINISHED;
+      process->burst_time--;
+
+      SC_Slice *entries = &s->process_timelines[i].entries;
+      SC_ProcessTimelineEntry entry = {
+          .state = STATE_FINISHED, .action_id = -1, .resource_id = -1};
+      SC_Slice_append(entries, &entry, err);
+      if (*err != NO_ERROR) {
+        return;
+      }
+
+      visited_processes[i] = 1;
+    }
+  }
+
+  // SET WAITING AND PROCCESSED STATES
+
+  // SET STARTING PROCESSES
+  for (int i = 0; i < s->process_count; i++) {
+    SC_SyncProcess *process = &s->processes[i];
+    if (next_cycle < process->arrival_time && visited_processes[i] == 0) {
+      process->current_state = STATE_READY;
+      process->burst_time--;
+
+      SC_Slice *entries = &s->process_timelines[i].entries;
+      SC_ProcessTimelineEntry entry = {
+          .state = STATE_READY, .action_id = -1, .resource_id = -1};
+      SC_Slice_append(entries, &entry, err);
+      if (*err != NO_ERROR) {
+        return;
+      }
+
+      visited_processes[i] = 1;
+    }
+  }
+
+  // SET UNVISITED PROCESS TO 'COMPUTING' STATE;
+  for (int i = 0; i < s->process_count; i++) {
+    SC_SyncProcess *process = &s->processes[i];
+    if (visited_processes[i] == 0) {
+      process->current_state = STATE_COMPUTING;
+      process->burst_time--;
+
+      SC_Slice *entries = &s->process_timelines[i].entries;
+      SC_ProcessTimelineEntry entry = {
+          .state = STATE_COMPUTING, .action_id = -1, .resource_id = -1};
+      SC_Slice_append(entries, &entry, err);
+      if (*err != NO_ERROR) {
+        return;
+      }
+
+      visited_processes[i] = 1;
+    }
+  }
+
+  // for (int i = 0; i < s->process_count; i++) {
+  //   SC_Slice *entries = &s->process_timelines[i].entries;
+
+  //   SC_ProcessTimelineEntry entry = {
+  //       .state = STATE_COMPUTING, .action_id = 1, .resource_id = 1};
+  //   SC_Slice_append(entries, &entry, err);
+  //   if (*err != NO_ERROR) {
+  //     return;
+  //   }
+  // }
 
   s->current_cycle += 1;
   s->total_cycles += 1;

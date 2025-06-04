@@ -775,304 +775,322 @@ void simulate_shortest_first(SC_ProcessList *processes, SC_Simulation *sim) {
 
 void simulate_shortest_remaining(SC_ProcessList *processes,
                                  SC_Simulation *sim) {
-  if (!processes || !sim || processes->count == 0)
-    return;
+  // if (!processes || !sim || processes->count == 0)
+  //   return;
 
-  SC_ProcessList_sort(processes, compare_by_arrival_time);
+  // SC_ProcessList_sort(processes, compare_by_arrival_time);
 
-  int totalBurstTime = SC_Total_busrt_time(processes) + 1;
-  if (totalBurstTime <= 0)
-    return;
+  // int totalBurstTime = SC_Total_busrt_time(processes) + 1;
+  // if (totalBurstTime <= 0)
+  //   return;
 
-  sim->steps = calloc(totalBurstTime, sizeof(SC_SimStepState));
-  sim->step_length = totalBurstTime;
-  sim->current_step = 0;
+  // sim->steps = calloc(totalBurstTime, sizeof(SC_SimStepState));
+  // sim->step_length = totalBurstTime;
+  // sim->current_step = 0;
 
-  int *remaining_time = malloc(processes->count * sizeof(int));
-  int *arrival_time = malloc(processes->count * sizeof(int));
-  size_t *pid = malloc(processes->count * sizeof(size_t));
-  int *start_time = malloc(processes->count * sizeof(int));
-  int *finish_time = malloc(processes->count * sizeof(int));
-  if (!remaining_time || !arrival_time || !pid || !start_time || !finish_time)
-    return;
+  // int *remaining_time = malloc(processes->count * sizeof(int));
+  // int *arrival_time = malloc(processes->count * sizeof(int));
+  // size_t *pid = malloc(processes->count * sizeof(size_t));
+  // int *start_time = malloc(processes->count * sizeof(int));
+  // int *finish_time = malloc(processes->count * sizeof(int));
+  // if (!remaining_time || !arrival_time || !pid || !start_time || !finish_time)
+  //   return;
 
-  SC_ProcessList_Node *temp = processes->head;
-  int i = 0;
-  while (temp != NULL && i < processes->count) {
-    remaining_time[i] = temp->value.burst_time;
-    arrival_time[i] = temp->value.arrival_time;
-    pid[i] = temp->value.pid_idx;
-    start_time[i] = -1;
-    finish_time[i] = -1;
-    temp = temp->next;
-    i++;
-  }
+  // SC_ProcessList_Node *temp = processes->head;
+  // int i = 0;
+  // while (temp != NULL && i < processes->count) {
+  //   remaining_time[i] = temp->value.burst_time;
+  //   arrival_time[i] = temp->value.arrival_time;
+  //   pid[i] = temp->value.pid_idx;
+  //   start_time[i] = -1;
+  //   finish_time[i] = -1;
+  //   temp = temp->next;
+  //   i++;
+  // }
 
-  int time = 0;
-  int completed = 0;
-  int n = processes->count;
+  // int time = 0;
+  // int completed = 0;
+  // int n = processes->count;
 
-  while (completed < n && time < totalBurstTime - 1) {
-    // Encuentra el proceso con menor tiempo restante que ya llegó
-    int shortest = -1;
-    for (int j = 0; j < n; j++) {
-      if (arrival_time[j] <= time && remaining_time[j] > 0) {
-        if (shortest == -1 || remaining_time[j] < remaining_time[shortest]) {
-          shortest = j;
-        }
-      }
-    }
+  // while (completed < n && time < totalBurstTime - 1) {
+  //   // Encuentra el proceso con menor tiempo restante que ya llegó
+  //   int shortest = -1;
+  //   for (int j = 0; j < n; j++) {
+  //     if (arrival_time[j] <= time && remaining_time[j] > 0) {
+  //       if (shortest == -1 || remaining_time[j] < remaining_time[shortest]) {
+  //         shortest = j;
+  //       }
+  //     }
+  //   }
 
-    // Guardar el paso de simulación
-    SC_SimStepState *step = &sim->steps[time];
-    step->process_length = n;
-    step->current_process = (shortest != -1) ? pid[shortest] : -1;
-    step->processes = malloc(sizeof(SC_Process) * n);
+  //   // Guardar el paso de simulación
+  //   SC_SimStepState *step = &sim->steps[time];
+  //   step->process_length = n;
+  //   step->current_process = (shortest != -1) ? pid[shortest] : -1;
+  //   step->processes = malloc(sizeof(SC_Process) * n);
 
-    temp = processes->head;
-    for (int k = 0; k < n && temp != NULL; k++, temp = temp->next) {
-      step->processes[k] = temp->value;
-      step->processes[k].burst_time = remaining_time[k];
-    }
+  //   temp = processes->head;
+  //   for (int k = 0; k < n && temp != NULL; k++, temp = temp->next) {
+  //     step->processes[k] = temp->value;
+  //     step->processes[k].burst_time = remaining_time[k];
+  //   }
 
-    // Ejecutar el proceso
-    if (shortest != -1) {
-      if (start_time[shortest] == -1)
-        start_time[shortest] = time;
+  //   // Ejecutar el proceso
+  //   if (shortest != -1) {
+  //     if (start_time[shortest] == -1)
+  //       start_time[shortest] = time;
 
-      remaining_time[shortest]--;
+  //     remaining_time[shortest]--;
 
-      if (remaining_time[shortest] == 0) {
-        finish_time[shortest] = time + 1;
-        completed++;
-      }
-    }
+  //     if (remaining_time[shortest] == 0) {
+  //       finish_time[shortest] = time + 1;
+  //       completed++;
+  //     }
+  //   }
 
-    time++;
-  }
+  //   time++;
+  // }
 
-  // Agregar paso final con todos los burst_time en 0
-  if (time < totalBurstTime) {
-    SC_SimStepState *step = &sim->steps[time];
-    step->process_length = n;
-    step->current_process = -1; // ya no se está ejecutando ningún proceso
-    step->processes = malloc(sizeof(SC_Process) * n);
+  // // Agregar paso final con todos los burst_time en 0
+  // if (time < totalBurstTime) {
+  //   SC_SimStepState *step = &sim->steps[time];
+  //   step->process_length = n;
+  //   step->current_process = -1; // ya no se está ejecutando ningún proceso
+  //   step->processes = malloc(sizeof(SC_Process) * n);
 
-    temp = processes->head;
-    for (int k = 0; k < n && temp != NULL; k++, temp = temp->next) {
-      step->processes[k] = temp->value;
-      step->processes[k].burst_time = 0; // todos han terminado
-    }
+  //   temp = processes->head;
+  //   for (int k = 0; k < n && temp != NULL; k++, temp = temp->next) {
+  //     step->processes[k] = temp->value;
+  //     step->processes[k].burst_time = 0; // todos han terminado
+  //   }
 
-    sim->step_length = time + 1; // actualizar número real de pasos
-  }
+  //   sim->step_length = time + 1; // actualizar número real de pasos
+  // }
 
-  // Calcular tiempo promedio de espera
-  float total_waiting = 0.0f;
-  temp = processes->head;
-  for (int j = 0; j < n && temp != NULL; j++, temp = temp->next) {
-    int turnaround = finish_time[j] - arrival_time[j];
-    int waiting = turnaround - temp->value.burst_time;
-    if (waiting < 0)
-      waiting = 0;
-    total_waiting += waiting;
-  }
+  // // Calcular tiempo promedio de espera
+  // float total_waiting = 0.0f;
+  // temp = processes->head;
+  // for (int j = 0; j < n && temp != NULL; j++, temp = temp->next) {
+  //   int turnaround = finish_time[j] - arrival_time[j];
+  //   int waiting = turnaround - temp->value.burst_time;
+  //   if (waiting < 0)
+  //     waiting = 0;
+  //   total_waiting += waiting;
+  // }
 
-  sim->avg_waiting_time = total_waiting / n;
+  // sim->avg_waiting_time = total_waiting / n;
 
-  free(remaining_time);
-  free(arrival_time);
-  free(pid);
-  free(start_time);
-  free(finish_time);
+  // free(remaining_time);
+  // free(arrival_time);
+  // free(pid);
+  // free(start_time);
+  // free(finish_time);
 }
 
 void simulate_round_robin(SC_ProcessList *processes, SC_Simulation *sim,
                           int quantum) {
-  if (!processes || !sim || processes->count == 0 || quantum <= 0)
-    return;
+  // if (!processes || !sim || processes->count == 0 || quantum <= 0)
+  //   return;
 
-  SC_ProcessList_sort(processes, compare_by_arrival_time);
+  // SC_ProcessList_sort(processes, compare_by_arrival_time);
 
-  int totalBurstTime = SC_Total_busrt_time(processes) + 1; // +1 para paso final
-  int n = processes->count;
+  // int totalBurstTime = SC_Total_busrt_time(processes) + 1; // +1 para paso final
+  // int n = processes->count;
 
-  sim->steps = calloc(totalBurstTime * 2,
-                      sizeof(SC_SimStepState)); // más pasos por rotación
-  sim->step_length = 0;                         // se actualiza dinámicamente
-  sim->current_step = 0;
+  // sim->steps = calloc(totalBurstTime * 2,
+  //                     sizeof(SC_SimStepState)); // más pasos por rotación
+  // sim->step_length = 0;                         // se actualiza dinámicamente
+  // sim->current_step = 0;
 
-  int *remaining_time = malloc(sizeof(int) * n);
-  int *arrival_time = malloc(sizeof(int) * n);
-  size_t *pid = malloc(sizeof(size_t) * n);
-  int *start_time = malloc(sizeof(int) * n);
-  int *finish_time = malloc(sizeof(int) * n);
-  int *visited =
-      calloc(n, sizeof(int)); // para evitar duplicar procesos en cola
+  // int *remaining_time = malloc(sizeof(int) * n);
+  // int *arrival_time = malloc(sizeof(int) * n);
+  // size_t *pid = malloc(sizeof(size_t) * n);
+  // int *start_time = malloc(sizeof(int) * n);
+  // int *finish_time = malloc(sizeof(int) * n);
+  // int *visited =
+  //     calloc(n, sizeof(int)); // para evitar duplicar procesos en cola
 
-  for (int i = 0; i < n; i++) {
-    remaining_time[i] = 0;
-    arrival_time[i] = 0;
-    pid[i] = 0;
-    start_time[i] = -1;
-    finish_time[i] = -1;
-  }
+  // for (int i = 0; i < n; i++) {
+  //   remaining_time[i] = 0;
+  //   arrival_time[i] = 0;
+  //   pid[i] = 0;
+  //   start_time[i] = -1;
+  //   finish_time[i] = -1;
+  // }
 
-  SC_ProcessList_Node *temp = processes->head;
-  int i = 0;
-  while (temp && i < n) {
-    remaining_time[i] = temp->value.burst_time;
-    arrival_time[i] = temp->value.arrival_time;
-    pid[i] = temp->value.pid_idx;
-    i++;
-    temp = temp->next;
-  }
+  // SC_ProcessList_Node *temp = processes->head;
+  // int i = 0;
+  // while (temp && i < n) {
+  //   remaining_time[i] = temp->value.burst_time;
+  //   arrival_time[i] = temp->value.arrival_time;
+  //   pid[i] = temp->value.pid_idx;
+  //   i++;
+  //   temp = temp->next;
+  // }
 
-  // Cola circular simple de procesos listos
-  int *queue = malloc(sizeof(int) * totalBurstTime * 2);
-  int front = 0, rear = 0;
+  // // Cola circular simple de procesos listos
+  // int *queue = malloc(sizeof(int) * totalBurstTime * 2);
+  // int front = 0, rear = 0;
 
-  int time = 0;
-  int completed = 0;
-  int current_process = -1;
-  int time_slice = 0;
+  // int time = 0;
+  // int completed = 0;
+  // int current_process = -1;
+  // int time_slice = 0;
 
-  while (completed < n || current_process != -1) {
-    // Encolar nuevos procesos
-    for (int j = 0; j < n; j++) {
-      if (arrival_time[j] == time && remaining_time[j] > 0 && !visited[j]) {
-        queue[rear++] = j;
-        visited[j] = 1;
-      }
-    }
+  // while (completed < n || current_process != -1) {
+  //   // Encolar nuevos procesos
+  //   for (int j = 0; j < n; j++) {
+  //     if (arrival_time[j] == time && remaining_time[j] > 0 && !visited[j]) {
+  //       queue[rear++] = j;
+  //       visited[j] = 1;
+  //     }
+  //   }
 
-    // Si no hay proceso ejecutándose, tomar uno de la cola
-    if (current_process == -1 && front < rear) {
-      current_process = queue[front++];
-      time_slice = 0;
-    }
+  //   // Si no hay proceso ejecutándose, tomar uno de la cola
+  //   if (current_process == -1 && front < rear) {
+  //     current_process = queue[front++];
+  //     time_slice = 0;
+  //   }
 
-    // Guardar paso
-    SC_SimStepState *step = &sim->steps[sim->step_length++];
-    step->current_process = (current_process != -1) ? pid[current_process] : -1;
-    step->process_length = n;
-    step->processes = malloc(sizeof(SC_Process) * n);
+  //   // Guardar paso
+  //   SC_SimStepState *step = &sim->steps[sim->step_length++];
+  //   step->current_process = (current_process != -1) ? pid[current_process] : -1;
+  //   step->process_length = n;
+  //   step->processes = malloc(sizeof(SC_Process) * n);
 
-    temp = processes->head;
-    for (int k = 0; k < n && temp; k++, temp = temp->next) {
-      step->processes[k] = temp->value;
-      step->processes[k].burst_time = remaining_time[k];
-    }
+  //   temp = processes->head;
+  //   for (int k = 0; k < n && temp; k++, temp = temp->next) {
+  //     step->processes[k] = temp->value;
+  //     step->processes[k].burst_time = remaining_time[k];
+  //   }
 
-    // Ejecutar proceso actual
-    if (current_process != -1) {
-      if (start_time[current_process] == -1)
-        start_time[current_process] = time;
+  //   // Ejecutar proceso actual
+  //   if (current_process != -1) {
+  //     if (start_time[current_process] == -1)
+  //       start_time[current_process] = time;
 
-      remaining_time[current_process]--;
-      time_slice++;
+  //     remaining_time[current_process]--;
+  //     time_slice++;
 
-      if (remaining_time[current_process] == 0) {
-        finish_time[current_process] = time + 1;
-        completed++;
-        current_process = -1;
-      } else if (time_slice == quantum) {
-        // Termina su quantum, vuelve a la cola
-        queue[rear++] = current_process;
-        current_process = -1;
-      }
-    }
+  //     if (remaining_time[current_process] == 0) {
+  //       finish_time[current_process] = time + 1;
+  //       completed++;
+  //       current_process = -1;
+  //     } else if (time_slice == quantum) {
+  //       // Termina su quantum, vuelve a la cola
+  //       queue[rear++] = current_process;
+  //       current_process = -1;
+  //     }
+  //   }
 
-    time++;
-  }
+  //   time++;
+  // }
 
-  // Calcular tiempo promedio de espera
-  float total_waiting = 0.0f;
-  temp = processes->head;
-  for (int j = 0; j < n && temp != NULL; j++, temp = temp->next) {
-    int turnaround = finish_time[j] - arrival_time[j];
-    int waiting = turnaround - temp->value.burst_time;
-    if (waiting < 0)
-      waiting = 0;
-    total_waiting += waiting;
-  }
+  // // Calcular tiempo promedio de espera
+  // float total_waiting = 0.0f;
+  // temp = processes->head;
+  // for (int j = 0; j < n && temp != NULL; j++, temp = temp->next) {
+  //   int turnaround = finish_time[j] - arrival_time[j];
+  //   int waiting = turnaround - temp->value.burst_time;
+  //   if (waiting < 0)
+  //     waiting = 0;
+  //   total_waiting += waiting;
+  // }
 
-  sim->avg_waiting_time = total_waiting / n;
+  // sim->avg_waiting_time = total_waiting / n;
 
-  free(remaining_time);
-  free(arrival_time);
-  free(pid);
-  free(start_time);
-  free(finish_time);
-  free(queue);
-  free(visited);
+  // free(remaining_time);
+  // free(arrival_time);
+  // free(pid);
+  // free(start_time);
+  // free(finish_time);
+  // free(queue);
+  // free(visited);
 }
 
 void simulate_priority(SC_ProcessList *processes, SC_Simulation *sim) {
-  SC_ProcessList_sort(processes, compare_by_priority);
+    int n = processes->count;
 
-  int totalBurstTime = SC_Total_busrt_time(processes);
+  // Paso 1: Copiar punteros a los procesos
+  SC_Process **proc_array = malloc(sizeof(SC_Process *) * n);
+  SC_ProcessList_Node *node = processes->head;
+  for (int i = 0; i < n && node != NULL; i++, node = node->next) {
+    proc_array[i] = &node->value;
+  }
+
+  // Paso 2: Ordenar por tiempo de llegada
+  qsort(proc_array, n, sizeof(SC_Process *), compare_proc_ptrP);
+
+  // Paso 3: Calcular total burst time
+  int totalBurstTime = 0;
+  for (int i = 0; i < n; i++) {
+    totalBurstTime += proc_array[i]->burst_time;
+  }
 
   sim->step_length = totalBurstTime;
   sim->current_step = 0;
   sim->steps = malloc(sizeof(SC_SimStepState) * totalBurstTime);
 
-  SC_ProcessList_Node *current = processes->head;
+  // Array auxiliar para hacer seguimiento del burst_time restante
+  int *remaining_bursts = malloc(sizeof(int) * n);
+  for (int i = 0; i < n; i++) {
+    remaining_bursts[i] = proc_array[i]->burst_time;
+  }
+
   int time = 0;
-  int process_index = 0;
-  int elapsed_time = 0; // Tiempo transcurrido total para el scheduling FIFO
+  int elapsed_time = 0;
   float total_waiting_time = 0;
 
-  while (current != NULL) {
-    SC_Process proc = current->value;
+  for (int pidx = 0; pidx < n; pidx++) {
+    SC_Process *proc = proc_array[pidx];
 
-    // Waiting time = elapsed_time - arrival_time (si es negativo, 0)
-    int waiting_time = elapsed_time - proc.arrival_time;
+    int waiting_time = elapsed_time - proc->arrival_time;
     if (waiting_time < 0)
       waiting_time = 0;
 
-    // Guardar el waiting time en el proceso (si se puede modificar
-    // directamente)
-    proc.waiting_time = waiting_time;
-
     total_waiting_time += waiting_time;
 
-    for (int i = 0; i < (int)proc.burst_time; i++) {
+    for (int b = 0; b < proc->burst_time; b++) {
       SC_SimStepState *step = &sim->steps[time];
-      step->current_process = proc.pid_idx;
+      step->current_process = proc->pid_idx;
 
-      step->process_length = processes->count;
-      step->processes = malloc(sizeof(SC_Process) * processes->count);
+      step->process_length = n;
+      step->processes = malloc(sizeof(SC_Process) * n);
 
-      SC_ProcessList_Node *copy_node = processes->head;
+      SC_ProcessList_Node *orig = processes->head;
       int j = 0;
-      while (copy_node != NULL) {
-        SC_Process p = copy_node->value;
+      while (orig != NULL) {
+        SC_Process copy = orig->value;
 
-        if (j < process_index) {
-          p.burst_time = 0;
-        } else if (j == process_index) {
-          p.burst_time = proc.burst_time - i - 1;
-          p.waiting_time = waiting_time; // También puedes actualizarlo aquí
-                                         // para mostrar en steps
-        } else {
-          p.burst_time = copy_node->value.burst_time;
-          p.waiting_time = 0;
+        // Buscar el índice en proc_array para saber cuántos ticks le quedan
+        for (int k = 0; k < n; k++) {
+          if (copy.pid_idx == proc_array[k]->pid_idx) {
+            int adjusted_burst = remaining_bursts[k] - (k == pidx ? 1 : 0);
+            copy.burst_time = adjusted_burst < 0 ? 0 : adjusted_burst;
+            if (k == pidx) {
+              copy.waiting_time = waiting_time;
+            } else {
+              copy.waiting_time = 0;
+            }
+            break;
+          }
         }
 
-        step->processes[j++] = p;
-        copy_node = copy_node->next;
+        step->processes[j++] = copy;
+        orig = orig->next;
       }
 
+      remaining_bursts[pidx]--; // Disminuye el burst_time del proceso actual
       time++;
     }
 
-    elapsed_time += proc.burst_time;
-    current = current->next;
-    process_index++;
+    elapsed_time += proc->burst_time;
   }
 
-  sim->avg_waiting_time = total_waiting_time / (float)processes->count;
+  sim->avg_waiting_time = total_waiting_time / (float)n;
+
+  free(remaining_bursts);
+  free(proc_array);
 }
 
 void parse_scheduling_file(SC_String *file_contents,

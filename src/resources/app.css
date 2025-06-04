@@ -41,12 +41,15 @@
 
 .pid_0 {
 	background-color: skyblue;
+	color: black;
 }
 .pid_1 {
 	background-color: #70ada4;
+	color: black;
 }
 .pid_2 {
 	background-color: #5b9a9a;
+	color: black;
 }
 .pid_3 {
 	background-color: #4d7d8d;
@@ -98,9 +101,11 @@
 }
 .pid_15 {
 	background-color: #62bb7d;
+	color: black;
 }
 .pid_16 {
 	background-color: #79cd7a;
+	color: black;
 }
 .pid_17 {
 	background-color: #240d39;
@@ -128,12 +133,15 @@
 }
 .pid_23 {
 	background-color: #92b5b8;
+	color: black;
 }
 .pid_24 {
 	background-color: #869da2;
+	color: black;
 }
 .pid_25 {
 	background-color: #79878e;
+	color: black;
 }
 .pid_26 {
 	background-color: #676c78;
@@ -185,30 +193,39 @@
 }
 .pid_38 {
 	background-color: #b3736a;
+	color: black;
 }
 .pid_39 {
 	background-color: #c69580;
+	color: black;
 }
 .pid_40 {
 	background-color: #d2ae91;
+	color: black;
 }
 .pid_41 {
 	background-color: #e5ccab;
+	color: black;
 }
 .pid_42 {
 	background-color: #f2e9cd;
+	color: black;
 }
 .pid_43 {
 	background-color: #f2dfa7;
+	color: black;
 }
 .pid_44 {
 	background-color: #dfb684;
+	color: black;
 }
 .pid_45 {
 	background-color: #d29567;
+	color: black;
 }
 .pid_46 {
 	background-color: #bf6e50;
+	color: black;
 }
 .pid_47 {
 	background-color: #b24e3d;
@@ -229,7 +246,8 @@
 }
 
 .simulation {
-	padding: 5px;
+	padding-left: 3rem;
+	padding-right: 3rem; 
 }
 
 .main_content {
@@ -241,4 +259,38 @@
 
 .alert_popup_btn {
 	margin-top: 20px;
+}
+
+.control_bar {
+	border-top: 1px solid black;
+	padding: 10px;
+}
+
+
+.table_column_corner{
+	padding: 6px;
+	font-size: 1.5rem;
+	font-weight: bold;
+	border-right: 1px solid rgb(163, 163, 163);
+	border-bottom: 1px solid rgb(163, 163, 163);
+}
+
+.table_column_header{
+	padding: 6px;
+	font-size: 1.5rem;
+	font-weight: bold;
+	border-bottom: 1px solid rgb(163, 163, 163);
+}
+
+.table_row_header{
+	padding: 6px;
+	font-size: 1.5rem;
+	font-weight: bold;
+	border-right: 1px solid rgb(163, 163, 163);
+}
+
+.table_cell{
+	padding: 6px;
+	font-size: 1.5rem;
+	font-weight: bold;
 }

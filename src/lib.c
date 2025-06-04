@@ -14,6 +14,9 @@ static const size_t OUT_OF_BOUNDS = 5;
 static const size_t EMPTY_STRING = 6;
 static const size_t INVALID_STRING = 7;
 static const size_t INVALID_TXT_FILE = 8;
+static const size_t RESOURCE_NOT_FOUND = 9;
+static const size_t PROCESS_NOT_FOUND = 10;
+static const size_t SLICE_EXPANSION_FAILED = 11;
 
 static const char *SC_Err_ToString(SC_Err err) {
   size_t val = *err;
@@ -33,6 +36,12 @@ static const char *SC_Err_ToString(SC_Err err) {
     return "The supplied string is invalid for the operation!";
   } else if (val == INVALID_TXT_FILE) {
     return "The supplied TXT file is invalid!";
+  } else if (val == RESOURCE_NOT_FOUND) {
+    return "Resource not found!";
+  } else if (val == PROCESS_NOT_FOUND) {
+    return "Process not found!";
+  } else if (val == SLICE_EXPANSION_FAILED) {
+    return "Slice expansion failed!";
   } else {
     return "INVALID ERROR VALUE RECEIVED!";
   }
@@ -313,6 +322,77 @@ void SC_String_TrimStart(SC_String *str, char search) {
   }
 }
 
+int SC_String_LineCount(SC_String *str) {
+  if (str == NULL || str->data == NULL || str->length == 0) {
+    return 0;
+  }
+
+  int count = 1; // At least one line even if no '\n'
+  for (size_t i = 0; i < str->length; ++i) {
+    if (str->data[i] == '\n') {
+      count++;
+    }
+  }
+
+  return count;
+}
+
+SC_String SC_String_GetLine(SC_String *str, size_t line_number) {
+  size_t start = 0;
+  size_t current_line = 0;
+
+  // Find the start index of the desired line
+  for (size_t i = 0; i < str->length; ++i) {
+    if (SC_String_CharAt(str, i) == '\n') {
+      if (current_line == line_number) {
+        break;
+      }
+      current_line++;
+      start = i + 1;
+    }
+  }
+
+  // If we never reached the desired line
+  if (current_line < line_number) {
+    return (SC_String){.data = NULL, .length = 0, .data_capacity = 0};
+  }
+
+  // Find the end index of the line
+  size_t end = start;
+  while (end < str->length && SC_String_CharAt(str, end) != '\n') {
+    end++;
+  }
+
+  return (SC_String){
+      .data = &str->data[start],
+      .length = end - start,
+      .data_capacity = 0 // capacity is not meaningful here
+  };
+}
+
+SC_String SC_String_GetCSVColumn(SC_String *str, size_t column_index) {
+  size_t start = 0;
+  size_t current_col = 0;
+
+  for (size_t i = 0; i <= str->length; ++i) {
+    // Either end of string or comma
+    if (i == str->length || SC_String_CharAt(str, i) == ',') {
+      if (current_col == column_index) {
+        return (SC_String){
+            .data = &str->data[start],
+            .length = i - start,
+            .data_capacity = 0 // meaningless in a slice
+        };
+      }
+      current_col++;
+      start = i + 1;
+    }
+  }
+
+  // Column index out of bounds
+  return (SC_String){.data = NULL, .length = 0, .data_capacity = 0};
+}
+
 struct SC_StringList_Node {
   SC_String value;
   struct SC_StringList_Node *next;
@@ -425,11 +505,12 @@ typedef struct {
  * @param element_size Size of each element in bytes.
  * @param initial_capacity Initial number of elements the slice can hold.
  */
-void SC_Slice_init(SC_Slice *s, size_t element_size, size_t initial_capacity) {
+void SC_Slice_init(SC_Slice *s, size_t element_size, size_t initial_capacity,
+                   SC_Err err) {
   s->data = malloc(element_size * initial_capacity);
   if (!s->data) {
-    perror("malloc failed");
-    exit(1);
+    *err = MALLOC_FAILED;
+    return;
   }
   s->length = 0;
   s->capacity = initial_capacity;
@@ -443,13 +524,13 @@ void SC_Slice_init(SC_Slice *s, size_t element_size, size_t initial_capacity) {
  * @param s Pointer to the SC_Slice to append to.
  * @param element Pointer to the element to append.
  */
-void SC_Slice_append(SC_Slice *s, void *element) {
+void SC_Slice_append(SC_Slice *s, void *element, SC_Err err) {
   if (s->length == s->capacity) {
     size_t new_capacity = s->capacity * 2;
     void *new_data = malloc(s->element_size * new_capacity);
-    if (!new_data) {
-      perror("realloc failed");
-      exit(1);
+    if (new_data == NULL) {
+      *err = SLICE_EXPANSION_FAILED;
+      return;
     }
 
     memcpy(new_data, s->data, s->element_size * s->length);
@@ -1229,8 +1310,6 @@ typedef struct {
   SC_ProcessState current_state;
   /** Remaining cycles to run. */
   int remaining_time;
-  /** Indicates whether the process is currently active. */
-  SC_Bool is_active;
 } SC_SyncProcess;
 
 /**
@@ -1262,8 +1341,6 @@ typedef struct {
   int counter;
   /** Maximum value the counter can hold (initial value). */
   int max_counter;
-  /** Synchronization mechanism used (mutex or semaphore). */
-  SC_SyncMechanism sync_type;
   /**
    * Unordered list of actions related to this resource.
    * Requires a full scan to process all actions.
@@ -1285,7 +1362,7 @@ typedef struct {
   int action_id;
   /** ID of the resource used, or -1 if none. */
   int resource_id;
-} ProcessTimelineEntry;
+} SC_ProcessTimelineEntry;
 
 /**
  * Represents the execution history of a process.
@@ -1298,7 +1375,7 @@ typedef struct {
    * Automatically grows as new entries are appended.
    */
   SC_Slice entries;
-} ProcessTimeline;
+} SC_ProcessTimeline;
 
 /**
  * Represents the full state of the simulation.
@@ -1314,7 +1391,7 @@ typedef struct {
   int resource_count;
 
   /** One timeline per process, tracking its execution history. */
-  ProcessTimeline *process_timelines;
+  SC_ProcessTimeline *process_timelines;
   int timeline_count;
 
   /** Current simulation cycle. */
@@ -1323,11 +1400,73 @@ typedef struct {
   /** Indicates whether the simulation is still running. */
   SC_Bool simulation_running;
 
+  /** Synchronization mechanism used (mutex or semaphore). */
+  SC_SyncMechanism sync_type;
+
   int semaphore_count;
 
   /** Total number of simulation cycles. */
   int total_cycles;
 } SC_SyncSimulator;
+
+// You can adjust this enum name/values based on your actual definition
+const char *process_state_to_string(SC_ProcessState state) {
+  switch (state) {
+  case STATE_READY:
+    return "READY";
+  case STATE_ACCESSED:
+    return "ACCESSED";
+  case STATE_COMPUTING:
+    return "COMPUTING";
+  case STATE_WAITING:
+    return "WAITING";
+  case STATE_FINISHED:
+    return "FINISHED";
+  default:
+    return "UNKNOWN";
+  }
+}
+
+void print_sync_process(const SC_SyncProcess *process) {
+  if (process == NULL) {
+    fprintf(stderr, "SC_SyncProcess is NULL\n");
+    return;
+  }
+
+  fprintf(stderr, "SC_SyncProcess:\n");
+  fprintf(stderr, "  ID: %d\n", process->id);
+  fprintf(stderr, "  Arrival Time: %d\n", process->arrival_time);
+  fprintf(stderr, "  Burst Time: %d\n", process->burst_time);
+  fprintf(stderr, "  Priority: %d\n", process->priority);
+  fprintf(stderr, "  Remaining Time: %d\n", process->remaining_time);
+  fprintf(stderr, "  Current State: %s\n",
+          process_state_to_string(process->current_state));
+}
+
+void print_sc_action(const SC_Action *action) {
+  if (!action) {
+    fprintf(stderr, "SC_Action_Print: NULL pointer provided.\n");
+    return;
+  }
+
+  fprintf(stderr,
+          "SC_Action { id: %d, pid: %d, resource_id: %d, cycle: %d, executed: "
+          "%s, priority: %d }\n",
+          action->id, action->pid, action->resource_id, action->cycle,
+          action->executed ? "true" : "false", action->priority);
+}
+
+void print_sc_resource(const SC_Resource *res) {
+  fprintf(stderr, "Resource ID: %d\n", res->id);
+  fprintf(stderr, "  Counter: %d\n", res->counter);
+  fprintf(stderr, "  Max Counter: %d\n", res->max_counter);
+  fprintf(stderr, "  Action Count: %d\n", res->action_count);
+
+  for (int i = 0; i < res->action_count; ++i) {
+    fprintf(stderr, "    Action #%d:\n", i);
+    print_sc_action(&res->actions[i]);
+  }
+}
 
 void SC_SyncSimulator_init(SC_SyncSimulator *simu) {}
 
@@ -1338,7 +1477,101 @@ void SC_SyncSimulator_init(SC_SyncSimulator *simu) {}
  *
  * The next step should be registered on
  */
-void SC_SyncSimulator_next(SC_SyncSimulator *s) {
+void SC_SyncSimulator_next(SC_SyncSimulator *s, SC_Err err) {
+
+  int next_cycle = s->current_cycle + 1;
+
+  int visited_processes[s->process_count];
+  for (int i = 0; i < s->process_count; i++) {
+    visited_processes[i] = 0;
+  }
+
+  // CHECK IF SIMULATION ENDED
+  int proc_finished = 0;
+  for (int i = 0; i < s->process_count; i++) {
+    SC_SyncProcess *process = &s->processes[i];
+    if (process->current_state == STATE_FINISHED) {
+      proc_finished++;
+    }
+  }
+  if (proc_finished == s->process_count) {
+    s->simulation_running = SC_FALSE;
+    return;
+  }
+
+  // SET FINISHED PROCESSES
+  for (int i = 0; i < s->process_count; i++) {
+    SC_SyncProcess *process = &s->processes[i];
+    if (process->burst_time == 0) {
+      process->current_state = STATE_FINISHED;
+      process->burst_time--;
+
+      SC_Slice *entries = &s->process_timelines[i].entries;
+      SC_ProcessTimelineEntry entry = {
+          .state = STATE_FINISHED, .action_id = -1, .resource_id = -1};
+      SC_Slice_append(entries, &entry, err);
+      if (*err != NO_ERROR) {
+        return;
+      }
+
+      visited_processes[i] = 1;
+    }
+  }
+
+  // SET WAITING AND PROCCESSED STATES
+
+  // SET STARTING PROCESSES
+  for (int i = 0; i < s->process_count; i++) {
+    SC_SyncProcess *process = &s->processes[i];
+    if (next_cycle < process->arrival_time && visited_processes[i] == 0) {
+      process->current_state = STATE_READY;
+      process->burst_time--;
+
+      SC_Slice *entries = &s->process_timelines[i].entries;
+      SC_ProcessTimelineEntry entry = {
+          .state = STATE_READY, .action_id = -1, .resource_id = -1};
+      SC_Slice_append(entries, &entry, err);
+      if (*err != NO_ERROR) {
+        return;
+      }
+
+      visited_processes[i] = 1;
+    }
+  }
+
+  // SET UNVISITED PROCESS TO 'COMPUTING' STATE;
+  for (int i = 0; i < s->process_count; i++) {
+    SC_SyncProcess *process = &s->processes[i];
+    if (visited_processes[i] == 0) {
+      process->current_state = STATE_COMPUTING;
+      process->burst_time--;
+
+      SC_Slice *entries = &s->process_timelines[i].entries;
+      SC_ProcessTimelineEntry entry = {
+          .state = STATE_COMPUTING, .action_id = -1, .resource_id = -1};
+      SC_Slice_append(entries, &entry, err);
+      if (*err != NO_ERROR) {
+        return;
+      }
+
+      visited_processes[i] = 1;
+    }
+  }
+
+  // for (int i = 0; i < s->process_count; i++) {
+  //   SC_Slice *entries = &s->process_timelines[i].entries;
+
+  //   SC_ProcessTimelineEntry entry = {
+  //       .state = STATE_COMPUTING, .action_id = 1, .resource_id = 1};
+  //   SC_Slice_append(entries, &entry, err);
+  //   if (*err != NO_ERROR) {
+  //     return;
+  //   }
+  // }
+
+  s->current_cycle += 1;
+  s->total_cycles += 1;
+
   // Pseudo code (just a suggestion)
   //
   // process_visited = []
@@ -1369,11 +1602,474 @@ void SC_SyncSimulator_next(SC_SyncSimulator *s) {
   //
 }
 
-void parse_syncProcess_file(SC_String *file_contents,
-                            struct SC_Arena *pids_arena,
-                            struct SC_Arena *processes_arena,
-                            SC_StringList *pid_list, SC_ProcessList *processes,
-                            SC_Err err) {}
+void fill_name_list_helper(SC_String *content, struct SC_Arena *arena,
+                           SC_StringList *list, int column, SC_Err err);
+
+void fill_processes(SC_String *file_contents, SC_StringList *process_names,
+                    SC_SyncSimulator *simulator, SC_Err err);
+
+void fill_resources(SC_String *file_contents, SC_StringList *resources_names,
+                    SC_SyncSimulator *simulator, SC_Err err);
+
+void fill_actions(SC_String *file_contents, struct SC_Arena *sync_arena,
+                  SC_StringList *resources_names, SC_StringList *process_names,
+                  SC_StringList *actions_names, SC_SyncSimulator *simulator,
+                  SC_Err err);
+
+void parse_syncProcess_file(SC_String *process_file, SC_String *resource_file,
+                            SC_String *actions_file,
+                            struct SC_Arena *sync_arena,
+                            SC_SyncSimulator **simulator_ptr,
+                            SC_StringList *process_names,
+                            SC_StringList *resources_names,
+                            SC_StringList *actions_names, SC_Err err) {
+
+  // GET PROCESS NAMES
+  fill_name_list_helper(process_file, sync_arena, process_names, 1, err);
+  if (*err != NO_ERROR) {
+    return;
+  }
+
+  fill_name_list_helper(resource_file, sync_arena, resources_names, 1, err);
+  if (*err != NO_ERROR) {
+    return;
+  }
+
+  fill_name_list_helper(actions_file, sync_arena, actions_names, 2, err);
+  if (*err != NO_ERROR) {
+    return;
+  }
+
+  struct SC_StringList_Node *current = process_names->head;
+  while (current != NULL) {
+    if (current->value.data != NULL) {
+      fprintf(stderr, "%s\n", current->value.data);
+    }
+    current = current->next;
+  }
+
+  current = resources_names->head;
+  while (current != NULL) {
+    if (current->value.data != NULL) {
+      fprintf(stderr, "%s\n", current->value.data);
+    }
+    current = current->next;
+  }
+
+  current = actions_names->head;
+  while (current != NULL) {
+    if (current->value.data != NULL) {
+      fprintf(stderr, "%s\n", current->value.data);
+    }
+    current = current->next;
+  }
+
+  // ALLOCATE SIMULATION
+
+  SC_SyncSimulator *simulator = *simulator_ptr;
+  simulator = SC_Arena_Alloc(sync_arena, sizeof(SC_SyncSimulator), err);
+  if (*err != NO_ERROR) {
+    return;
+  }
+  *simulator_ptr = simulator;
+
+  // PROCCESSES
+  SC_SyncProcess *proccesses = SC_Arena_Alloc(
+      sync_arena, sizeof(SC_SyncProcess) * process_names->count, err);
+  simulator->process_count = process_names->count;
+  simulator->processes = proccesses;
+
+  fill_processes(process_file, process_names, simulator, err);
+  if (*err != NO_ERROR) {
+    return;
+  }
+
+  for (int i = 0; i < simulator->process_count; ++i) {
+    SC_SyncProcess *proc = &simulator->processes[i];
+    print_sync_process(
+        proc); // or access fields like proc->id, proc->burst_time, etc.
+  }
+
+  // RESOURCES
+  SC_Resource *resources = SC_Arena_Alloc(
+      sync_arena, sizeof(SC_Resource) * resources_names->count, err);
+  simulator->resource_count = resources_names->count;
+  simulator->resources = resources;
+
+  fill_resources(resource_file, resources_names, simulator, err);
+  if (*err != NO_ERROR) {
+    return;
+  }
+
+  for (int i = 0; i < simulator->resource_count; ++i) {
+    SC_Resource *res = &simulator->resources[i];
+    print_sc_resource(res);
+  }
+
+  // ACTIONS
+  fill_actions(actions_file, sync_arena, resources_names, process_names,
+               actions_names, simulator, err);
+
+  for (int i = 0; i < simulator->resource_count; ++i) {
+    SC_Resource *res = &simulator->resources[i];
+    print_sc_resource(res);
+  }
+
+  // TIMELINES
+  SC_ProcessTimeline *timelines = SC_Arena_Alloc(
+      sync_arena, sizeof(SC_ProcessTimeline) * simulator->process_count, err);
+  simulator->process_timelines = timelines;
+  simulator->timeline_count = simulator->process_count;
+
+  // TIMELINES ENTRIES
+  for (int i = 0; i < simulator->timeline_count; ++i) {
+    SC_Slice_init(&simulator->process_timelines[i].entries,
+                  sizeof(SC_ProcessTimelineEntry), 8, err);
+    if (*err != NO_ERROR) {
+      return;
+    }
+  }
+}
+
+void fill_name_list_helper(SC_String *content, struct SC_Arena *arena,
+                           SC_StringList *list, int column, SC_Err err) {
+
+  const int b_max_length = 255;
+  char b_data[b_max_length]; // Max length of a column
+  SC_String buffer = {
+      .data = b_data,
+      .length = 0,
+      .data_capacity = b_max_length,
+  };
+
+  int current_column = 1;
+
+  for (int i = 0; i < content->length; i++) {
+    char current_char = SC_String_CharAt(content, i);
+
+    if (current_column == column) {
+      if (current_char == ',' || current_char == '\n') {
+
+        SC_String_AppendChar(&buffer, 0, err);
+        if (*err != NO_ERROR) {
+          return;
+        }
+
+        SC_StringList_Append(list, arena, buffer, err);
+        if (*err != NO_ERROR) {
+          return;
+        }
+
+        // Save current
+        buffer.length = 0;
+        current_column++;
+        continue;
+      }
+
+      SC_String_AppendChar(&buffer, current_char, err);
+      if (*err != NO_ERROR) {
+        return;
+      }
+    } else {
+
+      if (current_char == ',') {
+        current_column++;
+        continue;
+      }
+
+      if (current_char == '\n') {
+        current_column = 1;
+        continue;
+      }
+    }
+  }
+}
+
+void fill_processes(SC_String *file_contents, SC_StringList *process_names,
+                    SC_SyncSimulator *simulator, SC_Err err) {
+
+  const int b_max_length = 255;
+  char b_data[b_max_length]; // Max length of a column
+  SC_String buffer = {
+      .data = b_data,
+      .length = 0,
+      .data_capacity = b_max_length,
+  };
+
+  int current_column = 1;
+  int current_row = 0;
+
+  for (int i = 0; i < file_contents->length; i++) {
+
+    char current_char = SC_String_CharAt(file_contents, i);
+    switch (current_char) {
+
+    case '\n': {
+
+      if (4 != current_column) {
+        *err = INVALID_TXT_FILE;
+        return;
+      }
+
+      SC_String_TrimStart(&buffer, ' ');
+      int column_value = SC_String_ParseInt(&buffer, err);
+      if (*err != NO_ERROR) {
+        return;
+      }
+
+      simulator->processes[current_row].priority = column_value;
+      simulator->processes[current_row].id = current_row;
+      simulator->processes[current_row].current_state = STATE_READY;
+
+      buffer.length = 0;
+      current_column = 1;
+      current_row++;
+
+    } break;
+
+    case ',': {
+      if (1 != current_column) {
+        SC_String_TrimStart(&buffer, ' ');
+        int column_value = SC_String_ParseInt(&buffer, err);
+        if (*err != NO_ERROR) {
+          return;
+        }
+
+        if (2 == current_column) {
+          simulator->processes[current_row].burst_time = column_value;
+          simulator->processes[current_row].remaining_time = column_value;
+
+        } else if (3 == current_column) {
+          simulator->processes[current_row].arrival_time = column_value;
+        } else {
+          *err = INVALID_TXT_FILE;
+          return;
+        }
+      }
+
+      buffer.length = 0;
+      current_column++;
+    } break;
+    default: {
+      SC_String_AppendChar(&buffer, current_char, err);
+      if (*err != NO_ERROR) {
+        return;
+      }
+    }
+    }
+  }
+}
+
+void fill_resources(SC_String *file_contents, SC_StringList *resources_names,
+                    SC_SyncSimulator *simulator, SC_Err err) {
+
+  const int b_max_length = 255;
+  char b_data[b_max_length]; // Max length of a column
+  SC_String buffer = {
+      .data = b_data,
+      .length = 0,
+      .data_capacity = b_max_length,
+  };
+
+  int current_column = 1;
+  int current_row = 0;
+
+  for (int i = 0; i < file_contents->length; i++) {
+
+    char current_char = SC_String_CharAt(file_contents, i);
+    switch (current_char) {
+
+    case '\n': {
+
+      if (2 != current_column) {
+        *err = INVALID_TXT_FILE;
+        return;
+      }
+
+      SC_String_TrimStart(&buffer, ' ');
+      int column_value = SC_String_ParseInt(&buffer, err);
+      if (*err != NO_ERROR) {
+        return;
+      }
+
+      simulator->resources[current_row].id = current_row;
+      simulator->resources[current_row].counter = column_value;
+      simulator->resources[current_row].max_counter = column_value;
+
+      buffer.length = 0;
+      current_column = 1;
+      current_row++;
+
+    } break;
+
+    case ',': {
+      buffer.length = 0;
+      current_column++;
+    } break;
+    default: {
+      SC_String_AppendChar(&buffer, current_char, err);
+      if (*err != NO_ERROR) {
+        return;
+      }
+    }
+    }
+  }
+}
+
+/** Ignores the last charactef of the b string */
+SC_Bool SC_String_Equals(SC_String *a, SC_String *b) {
+  if (a->length != b->length - 1) {
+    return SC_FALSE;
+  }
+
+  for (size_t i = 0; i < a->length; ++i) {
+    if (a->data[i] != b->data[i]) {
+      return SC_FALSE;
+    }
+  }
+
+  return SC_TRUE;
+}
+
+int SC_StringList_IndexOf(SC_StringList *list, SC_String *target) {
+  if (!list || !target)
+    return -1;
+
+  struct SC_StringList_Node *current = list->head;
+  int index = 0;
+
+  while (current != NULL) {
+    if (SC_String_Equals(target, &current->value) == SC_TRUE) {
+      return index;
+    }
+    current = current->next;
+    index++;
+  }
+
+  return -1; // not found
+}
+
+void fill_actions(SC_String *file_contents, struct SC_Arena *sync_arena,
+                  SC_StringList *resources_names, SC_StringList *process_names,
+                  SC_StringList *actions_names, SC_SyncSimulator *simulator,
+                  SC_Err err) {
+
+  int actions_resource_index[actions_names->count];
+  int actions_index_in_resource[actions_names->count];
+
+  // COUNT ACTIONS PER RESOURCE
+
+  // The files always have an extra line jump, hence -1
+  int num_lines = SC_String_LineCount(file_contents) - 1;
+
+  for (int line = 0; line < num_lines; line++) {
+    SC_String lineValue = SC_String_GetLine(file_contents, line);
+
+    SC_String resource = SC_String_GetCSVColumn(&lineValue, 2);
+    int index = SC_StringList_IndexOf(resources_names, &resource);
+    if (index == -1) {
+      *err = RESOURCE_NOT_FOUND;
+      return;
+    }
+    fprintf(stderr, "%.*s\n", (int)resource.length, resource.data);
+
+    actions_index_in_resource[line] = simulator->resources[index].action_count;
+    simulator->resources[index].action_count += 1;
+    actions_resource_index[line] = index;
+  }
+
+  // ALLOCATE SPACE FOR ACTIONS IN EACH RESOURCE;
+
+  for (int i = 0; i < simulator->resource_count; ++i) {
+    SC_Action *actions = SC_Arena_Alloc(
+        sync_arena, sizeof(SC_Action) * simulator->resources[i].action_count,
+        err);
+    simulator->resources[i].actions = actions;
+  }
+
+  // PARSE EACH ACTION;
+
+  const int b_max_length = 255;
+  char b_data[b_max_length]; // Max length of a column
+  SC_String buffer = {
+      .data = b_data,
+      .length = 0,
+      .data_capacity = b_max_length,
+  };
+
+  int current_column = 1;
+  int current_row = 0;
+
+  for (int i = 0; i < file_contents->length; i++) {
+
+    char current_char = SC_String_CharAt(file_contents, i);
+    switch (current_char) {
+
+    case '\n': {
+
+      if (4 != current_column) {
+        *err = INVALID_TXT_FILE;
+        return;
+      }
+
+      SC_String_TrimStart(&buffer, ' ');
+      int column_value = SC_String_ParseInt(&buffer, err);
+      if (*err != NO_ERROR) {
+        return;
+      }
+
+      int resourceIndex = actions_resource_index[current_row];
+      int actionIndex = actions_index_in_resource[current_row];
+
+      simulator->resources[resourceIndex].actions[actionIndex].id = current_row;
+      simulator->resources[resourceIndex].actions[actionIndex].cycle =
+          column_value;
+      simulator->resources[resourceIndex].actions[actionIndex].executed =
+          SC_FALSE;
+      simulator->resources[resourceIndex].actions[actionIndex].resource_id =
+          resourceIndex;
+
+      buffer.length = 0;
+      current_column = 1;
+      current_row++;
+
+    } break;
+
+    case ',': {
+      if (1 == current_column) {
+
+        int procIndex = SC_StringList_IndexOf(process_names, &buffer);
+        if (procIndex == -1) {
+          *err = PROCESS_NOT_FOUND;
+          return;
+        }
+
+        int resourceIndex = actions_resource_index[current_row];
+        int actionIndex = actions_index_in_resource[current_row];
+
+        simulator->resources[resourceIndex].actions[actionIndex].priority =
+            simulator->processes[procIndex].priority;
+
+        simulator->resources[resourceIndex].actions[actionIndex].pid =
+            simulator->processes[procIndex].id;
+
+      } else if (current_column > 4) {
+        *err = INVALID_TXT_FILE;
+        return;
+      }
+
+      buffer.length = 0;
+      current_column++;
+    } break;
+    default: {
+      SC_String_AppendChar(&buffer, current_char, err);
+      if (*err != NO_ERROR) {
+        return;
+      }
+    }
+    }
+  }
+}
 
 // ##################################
 // #                                #

@@ -65,7 +65,12 @@ typedef struct {
 } SC_SyncLoadedNewFileData;
 
 typedef struct {
+  GtkBox *container;
+} SC_SyncUpdateSimCanvas;
+
+typedef struct {
   SC_SyncLoadedNewFileData new_file_loaded;
+  SC_SyncUpdateSimCanvas update_sim_canvas;
 } SC_SyncGlobalEventData;
 
 // ################################
@@ -264,6 +269,87 @@ static void update_sim_canvas(SC_UpdateSimCanvasData params, SC_Err err) {
   }
 }
 
+static void sync_update_sim_canvas(SC_SyncUpdateSimCanvas params, SC_Err err) {
+
+  GtkWidget *widget;
+  while ((widget = gtk_widget_get_first_child(GTK_WIDGET(params.container))) !=
+         NULL) {
+    gtk_box_remove(params.container, widget);
+  }
+
+  GtkWidget *grid = gtk_grid_new();
+  // gtk_grid_set_row_spacing(GTK_GRID(grid), 8);
+  // gtk_grid_set_column_spacing(GTK_GRID(grid), 8);
+  gtk_widget_set_hexpand(grid, FALSE);
+  gtk_widget_set_vexpand(grid, TRUE);
+  gtk_widget_set_halign(grid, GTK_ALIGN_CENTER);
+  gtk_widget_set_valign(grid, GTK_ALIGN_FILL);
+
+  GtkWidget *corner_label = gtk_label_new("Cycle");
+  gtk_grid_attach(GTK_GRID(grid), corner_label, 0, 0, 1, 1);
+  gtk_widget_add_css_class(corner_label, "table_column_corner");
+
+  // RENDER COLUMN HEADERS
+  for (int c = 1; c <= SYNC_SIM_STATE->current_cycle; ++c) {
+    char label_text[16];
+    snprintf(label_text, sizeof(label_text), "%d", c);
+    GtkWidget *label = gtk_label_new(label_text);
+    gtk_grid_attach(GTK_GRID(grid), label, c, 0, 1, 1);
+    gtk_widget_add_css_class(label, "table_column_header");
+  }
+
+  // RENDER ROW HEADERS
+  for (int i = 0; i < SYNC_SIM_STATE->process_count; ++i) {
+    SC_String process_name = SC_StringList_GetAt(&SYNC_PROCESS_NAMES, i, err);
+    GtkWidget *row_label = gtk_label_new(process_name.data);
+    gtk_grid_attach(GTK_GRID(grid), row_label, 0, i + 1, 1, 1);
+    gtk_widget_add_css_class(row_label, "table_row_header");
+  }
+
+  // RENDER ROW CONTENT
+  for (int i = 0; i < SYNC_SIM_STATE->timeline_count; ++i) {
+    SC_Slice entriesSlice = SYNC_SIM_STATE->process_timelines[i].entries;
+
+    SC_ProcessTimelineEntry *entry =
+        (SC_ProcessTimelineEntry *)entriesSlice.data;
+
+    for (size_t j = 0; j < SYNC_SIM_STATE->current_cycle; j++) {
+
+      char label_class[20];
+
+      switch (entry[j].state) {
+      case STATE_READY: {
+        snprintf(label_class, sizeof(label_class), "pid_14");
+      } break;
+      case STATE_ACCESSED: {
+        snprintf(label_class, sizeof(label_class), "pid_22");
+      } break;
+      case STATE_COMPUTING: {
+        snprintf(label_class, sizeof(label_class), "pid_43");
+      } break;
+      case STATE_WAITING: {
+        snprintf(label_class, sizeof(label_class), "pid_3");
+      } break;
+      case STATE_FINISHED: {
+        snprintf(label_class, sizeof(label_class), "pid_49");
+      } break;
+      default: {
+        snprintf(label_class, sizeof(label_class), "pid_0");
+      } break;
+        ;
+      }
+
+      GtkWidget *label = gtk_label_new(process_state_to_string(entry[j].state));
+      gtk_widget_add_css_class(label, "table_cell");
+      gtk_widget_add_css_class(label, label_class);
+
+      gtk_grid_attach(GTK_GRID(grid), label, j + 1, i + 1, 1, 1);
+    }
+  }
+
+  gtk_box_append(GTK_BOX(params.container), grid);
+}
+
 void show_alert_dialog(GtkWidget *parent_widget, const char *title,
                        const char *message) {
   GtkWidget *parent_window = GTK_WIDGET(gtk_widget_get_root(parent_widget));
@@ -400,10 +486,6 @@ static void bind_avg_waiting_time_cb(GtkSignalListItemFactory *factory,
 // ||          HANDLERS          ||
 // ||                            ||
 // ################################
-
-static void print_hello(GtkWidget *widget, gpointer data) {
-  g_print("Hello World\n");
-}
 
 static void change_algorithm_to_first_in_first_out(GtkCheckButton *self,
                                                    gpointer *data) {
@@ -663,9 +745,6 @@ static void handle_reset_click(GtkWidget *widget, gpointer data) {
 static void sync_file_dialog_finished(GObject *source_object, GAsyncResult *res,
                                       gpointer data, SC_String *file_contents,
                                       GtkTextBuffer *buffer) {
-  SC_SyncGlobalEventData *global_ev_data = (SC_SyncGlobalEventData *)data;
-  SC_SyncLoadedNewFileData ev_data = global_ev_data->new_file_loaded;
-
   GError **error = NULL;
   GFile *file =
       gtk_file_dialog_open_finish(GTK_FILE_DIALOG(source_object), res, error);
@@ -751,6 +830,7 @@ static void sync_handle_load_actions(GtkWidget *widget, gpointer data) {
 
 static void load_sync_files(GtkWidget *widget, gpointer data) {
 
+  SC_SyncGlobalEventData *ev_data = (SC_SyncGlobalEventData *)data;
   if (PROCESS_FILE_CONTENT.length == 0 || RESOURCES_FILE_CONTENT.length == 0 ||
       ACTIONS_FILE_CONTENT.length == 0) {
     // Create and show an alert dialog
@@ -759,11 +839,129 @@ static void load_sync_files(GtkWidget *widget, gpointer data) {
     return;
   }
 
-  // TODO: FREE TIMELINES STEP DATA
-  SC_Arena_Reset(&SYNC_SIM_STATE);
+  size_t err = NO_ERROR;
+
+  // FREE DATA
+  if (SYNC_SIM_STATE != NULL) {
+    for (int i = 0; i < SYNC_SIM_STATE->timeline_count; ++i) {
+      SC_Slice_deinit(&SYNC_SIM_STATE->process_timelines[i].entries);
+    }
+  }
+
+  SC_Arena_Reset(&SYNC_SIM_ARENA);
   SC_StringList_Reset(&SYNC_PROCESS_NAMES);
   SC_StringList_Reset(&SYNC_RESOURCES_NAMES);
   SC_StringList_Reset(&SYNC_ACTIONS_NAMES);
+
+  parse_syncProcess_file(&PROCESS_FILE_CONTENT, &RESOURCES_FILE_CONTENT,
+                         &ACTIONS_FILE_CONTENT, &SYNC_SIM_ARENA,
+                         &SYNC_SIM_STATE, &SYNC_PROCESS_NAMES,
+                         &SYNC_RESOURCES_NAMES, &SYNC_ACTIONS_NAMES, &err);
+
+  if (err != NO_ERROR) {
+    show_alert_dialog(widget, "Error during files parsing",
+                      SC_Err_ToString(&err));
+    return;
+  }
+
+  // SET SINCRONZATION MODE
+  GtkSwitch *sync_switch =
+      GTK_SWITCH(ev_data->new_file_loaded.syncronization_switch);
+  gboolean is_active = gtk_switch_get_active(sync_switch);
+
+  if (is_active) {
+    int semaphore_count = (int)gtk_spin_button_get_value(
+        ev_data->new_file_loaded.semaphore_quantity);
+    SYNC_SIM_STATE->semaphore_count = semaphore_count;
+    SYNC_SIM_STATE->sync_type = SYNC_SEMAPHORE;
+  } else {
+    SYNC_SIM_STATE->sync_type = SYNC_MUTEX;
+  }
+
+  // SET EXTRA ATTRIBUTES
+  SYNC_SIM_STATE->current_cycle = 0;
+  SYNC_SIM_STATE->total_cycles = 0;
+  SYNC_SIM_STATE->simulation_running = SC_TRUE;
+
+  sync_update_sim_canvas(ev_data->update_sim_canvas, &err);
+}
+
+static void sync_handle_next_click(GtkWidget *widget, gpointer data) {
+  if (SYNC_SIM_STATE == NULL) {
+    show_alert_dialog(widget, "Error",
+                      "Simulation data has not been loaded yet!");
+    return;
+  }
+
+  if (SYNC_SIM_STATE->simulation_running == SC_FALSE) {
+    return;
+  }
+
+  fprintf(stderr, "MOVING NEXT \n");
+
+  if (SYNC_SIM_STATE->total_cycles >= SYNC_SIM_STATE->current_cycle + 1) {
+    SYNC_SIM_STATE->current_cycle = SYNC_SIM_STATE->current_cycle + 1;
+  } else {
+    size_t err = NO_ERROR;
+    SC_SyncSimulator_next(SYNC_SIM_STATE, &err);
+    if (err != NO_ERROR) {
+      show_alert_dialog(widget, "Error on simulation step",
+                        SC_Err_ToString(&err));
+      return;
+    }
+  }
+
+  // PRINT STATE
+
+  // UPDATE UI
+
+  size_t err = NO_ERROR;
+  SC_SyncGlobalEventData *ev_data = (SC_SyncGlobalEventData *)data;
+  sync_update_sim_canvas(ev_data->update_sim_canvas, &err);
+}
+
+static void sync_handle_previous_click(GtkWidget *widget, gpointer data) {
+  if (SYNC_SIM_STATE == NULL) {
+    show_alert_dialog(widget, "Error",
+                      "Simulation data has not been loaded yet!");
+    return;
+  }
+
+  if (SYNC_SIM_STATE->current_cycle - 1 < 0) {
+    return;
+  }
+
+  fprintf(stderr, "MOVING PREVIOUS \n");
+  SYNC_SIM_STATE->current_cycle = SYNC_SIM_STATE->current_cycle - 1;
+
+  // PRINT STATE
+
+  // UPDATE UI
+  size_t err = NO_ERROR;
+  SC_SyncGlobalEventData *ev_data = (SC_SyncGlobalEventData *)data;
+  sync_update_sim_canvas(ev_data->update_sim_canvas, &err);
+}
+
+static void sync_handle_reset_click(GtkWidget *widget, gpointer data) {
+  if (SYNC_SIM_STATE == NULL) {
+    show_alert_dialog(widget, "Error",
+                      "Simulation data has not been loaded yet!");
+    return;
+  }
+
+  if (SYNC_SIM_STATE->current_cycle == 0) {
+    return;
+  }
+
+  fprintf(stderr, "RESETING SIMULATION\n");
+  SYNC_SIM_STATE->current_cycle = 0;
+
+  // PRINT STATE
+
+  // UPDATE UI
+  size_t err = NO_ERROR;
+  SC_SyncGlobalEventData *ev_data = (SC_SyncGlobalEventData *)data;
+  sync_update_sim_canvas(ev_data->update_sim_canvas, &err);
 }
 
 // ################################
@@ -1119,7 +1317,7 @@ static GtkWidget *SyncView(GtkWindow *window) {
   // step=1, digits=0
   GtkWidget *spin_button = gtk_spin_button_new(adjustment, 1, 0);
   gtk_box_append(GTK_BOX(topbar), spin_button);
-  evData->new_file_loaded.semaphore_quantity = spin_button;
+  evData->new_file_loaded.semaphore_quantity = GTK_SPIN_BUTTON(spin_button);
 
   // === Spacer to push next widgets to the right ===
   GtkWidget *spacer = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
@@ -1130,7 +1328,7 @@ static GtkWidget *SyncView(GtkWindow *window) {
   // "Load" Button (left)
   GtkWidget *load_button = gtk_button_new_with_label("Load Data");
   gtk_box_append(GTK_BOX(topbar), load_button);
-  g_signal_connect(load_button, "clicked", G_CALLBACK(load_sync_files), NULL);
+  g_signal_connect(load_button, "clicked", G_CALLBACK(load_sync_files), evData);
 
   // === SIMULATION ===
   GtkWidget *simulation = gtk_box_new(GTK_ORIENTATION_VERTICAL, 5);
@@ -1141,12 +1339,38 @@ static GtkWidget *SyncView(GtkWindow *window) {
   gtk_widget_add_css_class(
       simulation, "simulation"); // was incorrectly added to `topbar` earlier
 
-  GtkWidget *main_label = gtk_label_new("Main Content");
-  GtkWidget *exit_button = gtk_button_new_with_label("Goodbye world!");
-  g_signal_connect(exit_button, "clicked", G_CALLBACK(print_hello), NULL);
+  // Wrap it in a scrolled window
+  GtkWidget *simulation_scroller = gtk_scrolled_window_new();
+  gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(simulation_scroller),
+                                simulation);
 
-  gtk_box_append(GTK_BOX(simulation), main_label);
-  gtk_box_append(GTK_BOX(simulation), exit_button);
+  // Optionally configure scroll policies
+  gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(simulation_scroller),
+                                 GTK_POLICY_AUTOMATIC, GTK_POLICY_AUTOMATIC);
+
+  evData->update_sim_canvas.container = GTK_BOX(simulation);
+
+  // === CONTROL BAR ===
+  GtkWidget *control_bar = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 10);
+  gtk_widget_set_halign(control_bar, GTK_ALIGN_FILL);
+  gtk_widget_set_valign(control_bar, GTK_ALIGN_START);
+  gtk_widget_add_css_class(control_bar, "control_bar");
+
+  GtkWidget *back_btn =
+      MainButton("< Back", sync_handle_previous_click, evData);
+  gtk_box_append(GTK_BOX(control_bar), back_btn);
+
+  GtkWidget *next_btn = MainButton("Next >", sync_handle_next_click, evData);
+  gtk_box_append(GTK_BOX(control_bar), next_btn);
+
+  GtkWidget *spacer2 = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
+  gtk_widget_set_hexpand(spacer2, TRUE);
+  gtk_widget_set_vexpand(spacer2, FALSE);
+  gtk_box_append(GTK_BOX(control_bar), spacer2);
+
+  GtkWidget *restart_btn =
+      MainButton("Restart", sync_handle_reset_click, evData);
+  gtk_box_append(GTK_BOX(control_bar), restart_btn);
 
   // === MAIN CONTENT ===
   GtkWidget *main_box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 5);
@@ -1158,7 +1382,8 @@ static GtkWidget *SyncView(GtkWindow *window) {
 
   // Insert topbar at the top of the vertical box
   gtk_box_append(GTK_BOX(main_box), topbar);
-  gtk_box_append(GTK_BOX(main_box), simulation);
+  gtk_box_append(GTK_BOX(main_box), simulation_scroller);
+  gtk_box_append(GTK_BOX(main_box), control_bar);
 
   // === SPLIT VIEW ===
   GtkWidget *paned = gtk_paned_new(GTK_ORIENTATION_HORIZONTAL);
@@ -1170,7 +1395,7 @@ static GtkWidget *SyncView(GtkWindow *window) {
   gtk_paned_set_end_child(GTK_PANED(paned), main_box);
 
   // Optional: set initial position (in pixels) for sidebar width
-  gtk_paned_set_position(GTK_PANED(paned), 400);
+  gtk_paned_set_position(GTK_PANED(paned), 200);
 
   return paned;
 }
@@ -1258,22 +1483,6 @@ int main(int argc, char **argv) {
   SC_StringList_Init(&SYNC_RESOURCES_NAMES);
   SC_StringList_Init(&SYNC_ACTIONS_NAMES);
 
-  static SC_String PROCESS_FILE_CONTENT = {
-      .length = 0,
-      .data = NULL,
-      .data_capacity = 0,
-  };
-  static SC_String RESOURCES_FILE_CONTENT = {
-      .length = 0,
-      .data = NULL,
-      .data_capacity = 0,
-  };
-  static SC_String ACTIONS_FILE_CONTENT = {
-      .length = 0,
-      .data = NULL,
-      .data_capacity = 0,
-  };
-
   SC_Arena_Init(&SYNC_SIM_ARENA,
                 sizeof(SC_SyncSimulator) +
                     sizeof(SC_SyncProcess) * INITIAL_PROCESSES +
@@ -1311,6 +1520,13 @@ int main(int argc, char **argv) {
   g_signal_connect(app, "activate", G_CALLBACK(activate), NULL);
   int status = g_application_run(G_APPLICATION(app), argc, argv);
   g_object_unref(app);
+
+  fprintf(stderr, "INFO: deiniting syncronization slices\n");
+  if (SYNC_SIM_STATE != NULL) {
+    for (int i = 0; i < SYNC_SIM_STATE->timeline_count; ++i) {
+      SC_Slice_deinit(&SYNC_SIM_STATE->process_timelines[i].entries);
+    }
+  }
 
   fprintf(stderr, "INFO: deiniting all arenas\n");
   SC_Arena_Deinit(&PROCESS_LIST_ARENA);

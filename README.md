@@ -146,6 +146,10 @@ All the yellow strucgtures lives in an preallocated `arena`, while the blue ones
 
 ![](syncronizationMemory.jpeg)
 
+### Input file 
+
+IMPORTANT, all CSV files must have an extra `linejump` at the end of the line.
+
 ### Simulation Structure
 
 This structure stores all necessary data for the synchronization simulation, including loaded processes, simulation resources, actions that modify process states, and more:
